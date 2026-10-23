@@ -1,0 +1,44 @@
+{
+  "name": "stow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "See what your Mac is holding, and what it can let go.",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "tsx src/shared/segments.test.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "*",
+    "@fontsource-variable/figtree": "*",
+    "@fontsource/jetbrains-mono": "*",
+    "@radix-ui/react-progress": "*",
+    "@radix-ui/react-scroll-area": "*",
+    "@radix-ui/react-separator": "*",
+    "@radix-ui/react-slot": "*",
+    "@radix-ui/react-tabs": "*",
+    "@radix-ui/react-tooltip": "*",
+    "class-variance-authority": "*",
+    "clsx": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "tailwind-merge": "*"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "*",
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "@vitejs/plugin-react": "*",
+    "electron": "*",
+    "electron-vite": "*",
+    "tailwindcss": "*",
+    "tsx": "*",
+    "typescript": "*",
+    "vite": "*"
+  }
+}

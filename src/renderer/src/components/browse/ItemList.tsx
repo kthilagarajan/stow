@@ -172,7 +172,6 @@ export function ItemList({
                     deferred={deferred}
                     index={index - 1}
                     onClick={(event) => click(event, item)}
-                    onDoubleClick={openable ? () => onOpen(item.path, diskName(item.path, item.title), item.summary) : undefined}
                     actions={
                       <>
                         {openable ? (

@@ -41,7 +41,7 @@ The storage bar across the top splits the disk into five groups. Click a group t
 
 - **Scan** measures the Mac. The result is saved, so the next launch opens straight onto it.
 - **Click** a row to see why it is on its shelf, when it was modified, created and last opened, and what is inside.
-- **Double-click** a folder, or use its arrow, to look inside it.
+- Use a folder's **arrow** to look inside it.
 - **⌘-click** to select several rows, then move them to the Bin together. **⌘A** selects every row that can go and **Esc** clears the selection.
 - **⇧⌘G** goes to any folder by path, like Finder's Go to Folder. Outside the usual places, only caches, installers and dependencies can be moved.
 - **Ask AI** builds a prompt about the selected folder and opens it in ChatGPT, Claude, Cursor or Codex, or copies it. Stow never sends it anywhere itself.

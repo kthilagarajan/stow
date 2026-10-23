@@ -18,7 +18,6 @@ export function ListRow({
   deferred,
   index = 0,
   onClick,
-  onDoubleClick,
   actions
 }: {
   title: string
@@ -36,7 +35,6 @@ export function ListRow({
   // Position in the list, used to stagger the entrance.
   index?: number
   onClick: (event: MouseEvent<HTMLButtonElement>) => void
-  onDoubleClick?: () => void
   actions?: ReactNode
 }) {
   return (
@@ -53,11 +51,7 @@ export function ListRow({
         type="button"
         aria-pressed={selected}
         title={compact ? summary : undefined}
-        onClick={(event) => {
-          // The second click of a double-click opens; it should not undo the first click's selection.
-          if (event.detail < 2) onClick(event)
-        }}
-        onDoubleClick={onDoubleClick}
+        onClick={onClick}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-3 pr-2 pl-2 text-left outline-none select-none',
           compact ? 'rounded-lg py-1.5' : 'rounded-xl py-2.5'

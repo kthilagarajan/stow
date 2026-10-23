@@ -9,6 +9,12 @@ use crate::model::{app_version, UpdateAsset, UpdateDownload, UpdateInfo, UpdateP
 use crate::paths;
 use crate::version::is_newer;
 
+// GitHub's servers answer on several addresses, and one can be unreachable from some networks.
+// The connect timeout is shared across the addresses, so a dead one is skipped in seconds instead of
+// after macOS's 75-second wait. The read timeout ends a stalled download instead of leaving it hanging.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(12);
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub struct Updates {
     latest: Option<UpdateInfo>,
     repo: Option<String>,
@@ -34,7 +40,7 @@ impl Updates {
     pub async fn fetch(repo: &str) -> Option<UpdateInfo> {
         let version = app_version();
         let url = format!("https://api.github.com/repos/{repo}/releases/latest");
-        let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().ok()?;
+        let client = reqwest::Client::builder().connect_timeout(CONNECT_TIMEOUT).timeout(Duration::from_secs(20)).build().ok()?;
         let response = client
             .get(url)
             .header("Accept", "application/vnd.github+json")
@@ -123,7 +129,11 @@ async fn download_file(
     version: &str,
     app: &AppHandle,
 ) -> Result<UpdateDownload, UpdateDownload> {
-    let client = reqwest::Client::builder().build().map_err(|_| UpdateDownload::err("The download stopped. Check the connection and try again."))?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .build()
+        .map_err(|_| UpdateDownload::err("The download stopped. Check the connection and try again."))?;
     let response = client
         .get(&asset.url)
         .header("User-Agent", format!("Stow/{version}"))

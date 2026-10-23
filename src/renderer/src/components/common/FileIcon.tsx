@@ -1,10 +1,23 @@
+import { useEffect, useState } from 'react'
 import type { EntryKind } from '@shared/types'
 import { AppWindow, File, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function FileIcon({ src, kind, className }: { src?: string; kind?: EntryKind; className?: string }) {
-  if (src) {
-    return <img src={src} alt="" draggable={false} className={cn('size-8 shrink-0 rounded-md object-contain', className)} />
+  const [broken, setBroken] = useState(false)
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        onError={() => setBroken(true)}
+        className={cn('size-8 shrink-0 rounded-md object-contain', className)}
+      />
+    )
   }
   const Icon = kind === 'file' ? File : kind === 'app' ? AppWindow : Folder
   return (

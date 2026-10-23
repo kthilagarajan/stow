@@ -15,9 +15,15 @@ export function storedTheme(): ThemeChoice {
   }
 }
 
+export function effectiveAppearance(): 'light' | 'dark' {
+  const choice = storedTheme()
+  return choice === 'dark' || (choice === 'system' && dark.matches) ? 'dark' : 'light'
+}
+
 function paint(choice: ThemeChoice): void {
   const isDark = choice === 'dark' || (choice === 'system' && dark.matches)
   document.documentElement.classList.toggle('dark', isDark)
+  window.dispatchEvent(new Event('stow-theme'))
 }
 
 // Applies a theme to the page and the window frame. `animate` cross-fades colours for a user-initiated switch.

@@ -4,7 +4,7 @@ import { ChevronRight, Search } from 'lucide-react'
 import { FileIcon } from '@/components/common/FileIcon'
 import { IconAction, ListRow } from '@/components/common/ListRow'
 import { MultiHint, SelectionBar } from '@/components/browse/SelectionBar'
-import { RowSkeletons } from '@/components/common/Skeletons'
+import { RowSkeletons, Skeleton } from '@/components/common/Skeletons'
 import { useFileIcons } from '@/hooks/useFileIcons'
 import { isMultiClick, useSelection } from '@/hooks/useSelection'
 import { formatBytes } from '@/lib/format'
@@ -98,7 +98,11 @@ export function FolderBrowser({
             <FileIcon src={icons[frame.path]} kind="folder" className="size-10" />
             <div className="min-w-0">
               <h1 className="font-display truncate text-[1.65rem] leading-none tracking-tight">{frame.label}</h1>
-              <p className="text-mist mt-1 font-mono text-xs">{formatBytes(frame.bytes)}</p>
+              {frame.measuring && frame.bytes === 0 ? (
+                <Skeleton className="mt-1 h-3 w-16" />
+              ) : (
+                <p className="text-mist mt-1 font-mono text-xs">{formatBytes(frame.bytes)}</p>
+              )}
             </div>
           </div>
           {trashable.length > 1 && <MultiHint />}
@@ -120,6 +124,12 @@ export function FolderBrowser({
             className="border-line bg-fog/70 focus-visible:outline-harbor h-9 w-full rounded-lg border pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           />
         </search>
+        {frame.measuring && !opening && (
+          <p className="text-mist mt-2 flex items-center gap-2 text-xs leading-relaxed" role="status">
+            <Skeleton className="size-2 shrink-0 rounded-full" />
+            Measuring sizes
+          </p>
+        )}
         {error && <p className="text-coral mt-2 text-sm leading-relaxed">{error}</p>}
         {frame.limited && (
           <p className="text-mist mt-2 text-xs leading-relaxed">macOS hid some files here, so this size may be low.</p>
@@ -131,7 +141,7 @@ export function FolderBrowser({
             <RowSkeletons compact={compact} count={Math.min(8, Math.max(3, entries.length))} label="Measuring the next folder" />
           ) : entries.length === 0 ? (
             <p className="text-mist px-1 py-8 text-sm leading-relaxed">
-              {q ? 'No folders match that filter.' : 'Nothing large enough to list in this folder.'}
+              {q ? 'Nothing matches that filter.' : 'This folder is empty.'}
             </p>
           ) : (
             <ul className={cn('flex flex-col', compact ? 'gap-0.5' : 'gap-1.5')}>
@@ -143,6 +153,7 @@ export function FolderBrowser({
                     key={entry.path}
                     title={entry.name}
                     bytes={entry.bytes}
+                    pending={!entry.measured}
                     summary={entry.summary}
                     color={verdicts[entry.verdict].bin}
                     icon={<FileIcon src={icons[entry.path]} kind={entry.kind} className={compact ? 'size-6' : undefined} />}
@@ -175,7 +186,7 @@ export function FolderBrowser({
               })}
             </ul>
           )}
-          {frame.smallerCount > 0 && !q && !opening && (
+          {frame.smallerCount > 0 && !q && !opening && !frame.measuring && (
             <p className="text-mist px-1 pt-3 text-xs leading-relaxed">
               {frame.smallerCount === 1 ? '1 smaller item' : `${frame.smallerCount} smaller items`}, {formatBytes(frame.smallerBytes)} together.
             </p>

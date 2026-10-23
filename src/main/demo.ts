@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { FolderEntry, FolderResult, ItemInfo, SavedScan, StorageChild, StorageItem, VolumeInfo } from '../shared/types'
+import type { FileIconSet, FolderEntry, FolderResult, ItemInfo, SavedScan, StorageChild, StorageItem, VolumeInfo } from '../shared/types'
 import { staticRoots } from './catalog'
 import { fileIcons } from './icons'
 
@@ -159,7 +159,8 @@ export function demoListing(filePath: string): FolderResult {
     kind: /[^/]\.\w{2,4}$/.test(name) ? 'file' : 'folder',
     verdict: owner.verdict,
     summary: owner.verdict === 'clear' ? 'Inside a folder that is safe to clear. The app can rebuild it.' : 'A folder inside this one.',
-    trashable: owner.trashable
+    trashable: owner.trashable,
+    measured: true
   }))
   return {
     ok: true,
@@ -168,12 +169,14 @@ export function demoListing(filePath: string): FolderResult {
       name: path.basename(filePath),
       bytes: total,
       verdict: owner.verdict,
-      summary: known?.summary ?? 'Folders inside this one, largest first.',
+      summary: known?.summary ?? 'Files and folders inside this one, largest first.',
       trashable: owner.trashable,
       entries,
       smallerCount: 7,
       smallerBytes: Math.round(total * 0.01),
-      limited: false
+      limited: false,
+      measuring: false,
+      token: 0
     }
   }
 }
@@ -192,8 +195,8 @@ export function demoInfo(filePath: string): ItemInfo {
 }
 
 // Every demo folder borrows the icon of a real, ordinary folder.
-export async function demoIcons(paths: string[]): Promise<Record<string, string>> {
+export async function demoIcons(paths: string[]): Promise<Record<string, FileIconSet>> {
   const sample = (await fileIcons(['/Library']))['/Library']
-  if (!sample) return {}
+  if (!sample?.light && !sample?.dark) return {}
   return Object.fromEntries(paths.filter((entry) => !/[^/]\.\w{2,4}$/.test(entry)).map((entry) => [entry, sample]))
 }

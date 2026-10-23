@@ -1,6 +1,7 @@
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Skeleton } from '@/components/common/Skeletons'
 import { formatBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +9,7 @@ export function ListRow({
   title,
   tag,
   bytes,
+  pending = false,
   summary,
   color,
   icon,
@@ -23,6 +25,8 @@ export function ListRow({
   // A friendlier label shown next to the on-disk name when they differ.
   tag?: string
   bytes: number
+  // The size is still being measured, so the number is a placeholder.
+  pending?: boolean
   summary: string
   color: string
   icon: ReactNode
@@ -72,7 +76,9 @@ export function ListRow({
           </span>
           {!compact && <span className="text-mist block truncate text-sm leading-snug">{summary}</span>}
         </span>
-        <span className={cn('shrink-0 font-mono', compact ? 'text-xs' : 'text-sm')}>{formatBytes(bytes)}</span>
+        <span className={cn('shrink-0 font-mono', compact ? 'text-xs' : 'text-sm')}>
+          {pending ? <Skeleton className={cn('h-3.5 w-12', compact && 'h-3')} /> : formatBytes(bytes)}
+        </span>
       </button>
       {actions && <span className="flex shrink-0 items-center gap-0.5 pr-1.5">{actions}</span>}
     </li>

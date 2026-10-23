@@ -7,15 +7,16 @@ import { shell, type WebContents } from 'electron'
 import { classifyEntry, classifyLargeFile } from './classify'
 import { discoverRoots, type RootSpec } from './catalog'
 import { describeChild } from './describe'
-import { runCommand } from './exec'
+import { runCommand, streamCommand } from './exec'
 import { IPC } from '../shared/ipc'
 import { applyTrash } from '../shared/items'
 import { lookupRecord, pathKeys, stricterVerdict, trashDecision, type TrashRecord } from './guard'
 import type {
   EntryKind,
   FolderEntry,
-  FolderListing,
   FolderResult,
+  FolderUpdate,
+  SavedFolder,
   ScanEvent,
   StorageChild,
   StorageItem,
@@ -26,7 +27,7 @@ import type {
 
 const LARGE_FILE_BYTES = 500_000_000
 const PREVIEW_CHILDREN = 16
-const LISTING_CAP = 80
+const SHOW_CAP = 500
 const FILE_ROOTS = new Set(['downloads', 'desktop', 'trash'])
 const HEAVY_IDS = new Set([
   'pictures',
@@ -52,6 +53,23 @@ interface MeasuredEntry {
   path: string
   bytes: number
   kind: EntryKind
+  // False until this row's size has actually been read. A 0 then means empty, not "still waiting".
+  sized?: boolean
+}
+
+interface RunningJob {
+  path: string
+  token: number
+  generation: number
+  self: { verdict: Verdict; trashable: boolean; summary: string }
+  entries: MeasuredEntry[]
+  bytes: number
+  limited: boolean
+  measuring: boolean
+  // True once du has reported this folder's own total, so child updates must not replace it.
+  bytesFromDu: boolean
+  saveTimer: NodeJS.Timeout | null
+  sender?: WebContents
 }
 
 interface CachedListing {
@@ -59,6 +77,9 @@ interface CachedListing {
   bytes: number
   entries: MeasuredEntry[]
   limited: boolean
+  complete: boolean
+  // True when entries are every file and folder, not only what the scan previewed.
+  full: boolean
 }
 
 async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -103,6 +124,25 @@ function entryKind(name: string, file: boolean): EntryKind {
   return 'folder'
 }
 
+function byName(a: { name: string }, b: { name: string }): number {
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+// Undefined when du never reported this row, so a partial walk is not stored as 0 KB.
+function recordedSize(entry: MeasuredEntry, files: Map<string, number>, dirs: Map<string, number>): number | undefined {
+  if (entry.kind === 'file') return files.has(entry.path) ? files.get(entry.path) : undefined
+  const resolved = path.resolve(entry.path)
+  if (dirs.has(resolved)) return dirs.get(resolved)
+  const base = path.basename(entry.path)
+  let found: number | undefined
+  for (const [key, value] of dirs) {
+    if (path.basename(key) !== base) continue
+    if (found !== undefined) return undefined
+    found = value
+  }
+  return found
+}
+
 function isHeavy(spec: RootSpec): boolean {
   return HEAVY_IDS.has(spec.id) || spec.id.startsWith('xcode:')
 }
@@ -121,10 +161,18 @@ export class Scanner {
   private processes = new Set<ChildProcess>()
   private registry = new Map<string, TrashRecord>()
   private listings = new Map<string, CachedListing>()
+  // Folder listings the person has opened. Kept apart from the scan so a rescan cannot wipe them.
+  private folders = new Map<string, CachedListing>()
+  private running = new Map<string, RunningJob>()
   private sizes = new Map<string, number>()
+  private saveFolder?: (folder: SavedFolder) => void
+  private removeFolder?: (folderPath: string) => void
+  private listener?: WebContents
+  private groups = new Set<ChildProcess>()
   private emitted: StorageItem[] = []
   private removed = new Set<string>()
   private home = os.homedir()
+  private listingTokens = new Map<string, number>()
   private publish: ((items: StorageItem[], limited: number) => void) | null = null
   private rememberTrash: ((moved: TrashedPath[]) => void) | null = null
 
@@ -136,13 +184,43 @@ export class Scanner {
     this.rememberTrash = remember
   }
 
+  setFolderStore(save: (folder: SavedFolder) => void, remove: (folderPath: string) => void): void {
+    this.saveFolder = save
+    this.removeFolder = remove
+  }
+
+  hydrateFolders(saved: SavedFolder[]): void {
+    for (const folder of saved) {
+      if (!folder.path || folder.entries.length === 0 && folder.bytes === 0 && !folder.complete) continue
+      const listing: CachedListing = {
+        path: folder.path,
+        bytes: folder.bytes,
+        limited: folder.limited,
+        complete: folder.complete,
+        full: true,
+        entries: folder.entries.map((entry) => ({
+          name: entry.name,
+          path: entry.path,
+          bytes: entry.bytes,
+          kind: entry.kind,
+          sized: folder.complete || entry.sized
+        }))
+      }
+      this.rememberFolder(listing)
+      if (folder.complete && folder.bytes > 0) this.noteSize(folder.path, folder.bytes)
+      for (const entry of listing.entries) {
+        if (entry.sized && entry.bytes > 0) this.noteSize(entry.path, entry.bytes)
+      }
+    }
+  }
+
   hydrate(items: StorageItem[]): void {
     for (const item of items) this.register(item)
   }
 
   stop(): void {
     this.generation += 1
-    for (const child of this.processes) child.kill('SIGKILL')
+    for (const child of this.processes) this.stopChild(child)
     this.processes.clear()
   }
 
@@ -151,6 +229,8 @@ export class Scanner {
     const generation = this.generation
     this.registry.clear()
     this.listings.clear()
+    this.listingTokens.clear()
+    this.dropRunning()
     this.sizes.clear()
     this.emitted = []
     this.removed.clear()
@@ -318,7 +398,7 @@ export class Scanner {
 
   // A folder the person typed or picked. Outside the scanned places it starts as "keep", so only the
   // caches, installers, and dependencies Stow recognises inside it can go to the Trash.
-  async goTo(filePath: string): Promise<FolderResult> {
+  async goTo(filePath: string, sender?: WebContents): Promise<FolderResult> {
     if (!validPath(filePath)) return { ok: false, error: 'Type a folder path, like ~/Projects.' }
     const expanded = filePath.trim().replace(/^~(?=$|\/)/, this.home)
     if (!path.isAbsolute(expanded)) return { ok: false, error: 'Start the path with / or ~/.' }
@@ -330,10 +410,11 @@ export class Scanner {
       return { ok: false, error: 'There is no folder at that path.' }
     }
     if (!this.owner(real)) this.addRecord(real, { verdict: 'keep', trashable: false })
-    return this.openFolder(real)
+    return this.openFolder(real, sender)
   }
 
-  async openFolder(filePath: string): Promise<FolderResult> {
+  // Names come back immediately. Sizes follow on folder:update so the window is not stuck on du.
+  async openFolder(filePath: string, sender?: WebContents): Promise<FolderResult> {
     if (!validPath(filePath)) return { ok: false, error: 'That path is not one Stow measured.' }
     const real = await this.real(filePath)
     if (!real) return { ok: false, error: 'That folder is no longer there.' }
@@ -350,27 +431,100 @@ export class Scanner {
     if (!info.isDirectory()) return { ok: false, error: 'That is a file. Reveal it in Finder to open it.' }
 
     const self = owner.exact
-      ? { verdict: owner.verdict, trashable: owner.trashable, summary: 'Folders inside this one, largest first.' }
+      ? { verdict: owner.verdict, trashable: owner.trashable, summary: 'Files and folders inside this one, largest first.' }
       : classifyEntry(path.basename(real), real, owner)
     if (!owner.exact) this.addRecord(real, self)
 
-    const cached = this.cachedListing(real)
-    const measured = cached ?? (await this.readListing(real, generation))
+    if (sender && !sender.isDestroyed()) this.listener = sender
+    const running = this.running.get(real)
+    if (running && running.generation === this.generation) {
+      if (sender && !sender.isDestroyed()) running.sender = sender
+      return this.jobResult(running)
+    }
+
+    const saved = this.folderListing(real)
+    if (saved?.full && saved.complete) return this.listingResult(real, self, saved, false, 0)
+
+    const preview = await this.previewEntries(real)
     if (generation !== this.generation) return { ok: false, error: 'The scan started again. Open the folder once it finishes.' }
-    if (!measured) return { ok: false, error: 'Stow could not read that folder.' }
+    if (!preview) return { ok: false, error: 'Stow could not read that folder.' }
+    if (saved?.full) this.reuseSizes(preview, saved.entries)
 
+    const already = this.running.get(real)
+    if (already && already.generation === this.generation) {
+      if (sender && !sender.isDestroyed()) already.sender = sender
+      return this.jobResult(already)
+    }
+
+    const known = saved?.bytes || this.knownSize(real) || 0
+    if (preview.length === 0) {
+      return this.listingResult(real, self, { path: real, bytes: known, entries: [], limited: false, complete: true, full: true }, false, 0)
+    }
+
+    const token = (this.listingTokens.get(real) ?? 0) + 1
+    this.listingTokens.set(real, token)
+    const job: RunningJob = {
+      path: real,
+      token,
+      generation,
+      self,
+      entries: preview,
+      bytes: known,
+      limited: saved?.limited ?? false,
+      measuring: true,
+      bytesFromDu: false,
+      saveTimer: null,
+      sender
+    }
+    this.running.set(real, job)
+    for (const entry of preview) {
+      const listed = this.toFolderEntry(entry, self, entry.sized === true)
+      this.addRecord(listed.path, listed)
+    }
+    const task = this.measureFolder(real, job)
+    if (!sender || sender.isDestroyed()) return (await task) ?? this.jobResult(job)
+    void task.catch(() => undefined)
+    return this.jobResult(job)
+  }
+
+  private jobResult(job: RunningJob): Extract<FolderResult, { ok: true }> {
+    return this.listingResult(
+      job.path,
+      job.self,
+      { path: job.path, bytes: job.bytes, entries: job.entries, limited: job.limited, complete: !job.measuring, full: true },
+      job.measuring,
+      job.token
+    )
+  }
+
+  private listingResult(
+    real: string,
+    self: { verdict: Verdict; trashable: boolean; summary: string },
+    measured: CachedListing,
+    measuring: boolean,
+    token: number
+  ): Extract<FolderResult, { ok: true }> {
     const entries = measured.entries
-      .map((entry) => this.toFolderEntry(entry, self))
-      .sort((a, b) => b.bytes - a.bytes)
-    for (const entry of entries) this.addRecord(entry.path, entry)
-
-    const shown = entries.slice(0, LISTING_CAP)
-    const rest = entries.slice(LISTING_CAP)
+      .map((entry) => {
+        let bytes = entry.bytes
+        let sized = entry.sized === true
+        if (!sized) {
+          const known = this.knownSize(entry.path)
+          if (known !== undefined) {
+            bytes = known
+            sized = true
+          }
+        }
+        return this.toFolderEntry({ ...entry, bytes }, self, sized)
+      })
+      .sort((a, b) => (measuring ? byName(a, b) : b.bytes - a.bytes || byName(a, b)))
+    const shown = entries.slice(0, SHOW_CAP)
+    const rest = entries.slice(SHOW_CAP)
     return {
       ok: true,
       listing: {
         path: real,
-        name: path.basename(real),
+        name: path.basename(real) || real,
         bytes: measured.bytes,
         verdict: self.verdict,
         summary: self.summary,
@@ -378,8 +532,353 @@ export class Scanner {
         entries: shown,
         smallerCount: rest.length,
         smallerBytes: rest.reduce((sum, entry) => sum + entry.bytes, 0),
-        limited: measured.limited
+        limited: measured.limited,
+        measuring,
+        token
       }
+    }
+  }
+
+  private async previewEntries(folder: string): Promise<MeasuredEntry[] | null> {
+    let dirents: Dirent[]
+    try {
+      dirents = await fs.readdir(folder, { withFileTypes: true })
+    } catch {
+      return null
+    }
+    const entries: MeasuredEntry[] = []
+    for (const dirent of dirents) {
+      if (!dirent.name || dirent.name === '.' || dirent.name === '..') continue
+      const directory = dirent.isDirectory()
+      entries.push({
+        name: dirent.name,
+        path: path.join(folder, dirent.name),
+        bytes: 0,
+        kind: entryKind(dirent.name, !directory),
+        sized: false
+      })
+    }
+    return entries
+  }
+
+  // Keeps running when the person opens another folder. A second open of this path joins the same job.
+  private async measureFolder(folder: string, job: RunningJob): Promise<FolderResult | null> {
+    const token = job.token
+    const current = () => this.generation === job.generation && this.running.get(folder) === job
+    const directories = job.entries.filter((entry) => entry.kind !== 'file' && !entry.sized)
+    const files = job.entries.filter((entry) => entry.kind === 'file' && !entry.sized)
+    const dirSizes = new Map<string, number>()
+    const fileSizes = new Map<string, number>()
+    for (const entry of job.entries) {
+      if (!entry.sized) continue
+      if (entry.kind === 'file') fileSizes.set(entry.path, entry.bytes)
+      else dirSizes.set(path.resolve(entry.path), entry.bytes)
+    }
+    const previewPaths = new Map(job.entries.map((entry) => [path.resolve(entry.path), entry]))
+    let pendingLine = ''
+    let batch: { path: string; bytes: number }[] = []
+    let flushTimer: NodeJS.Timeout | null = null
+    let closed = false
+
+    const emit = (measuring: boolean, entries: FolderEntry[] | null, smallerCount = 0, smallerBytes = 0): void => {
+      if ((closed && measuring) || !current()) return
+      if (measuring) this.scheduleSave(job)
+      const sender = job.sender
+      if (!sender || sender.isDestroyed()) return
+      const sizes = batch
+      batch = []
+      const update: FolderUpdate = {
+        path: folder,
+        token,
+        bytes: job.bytes,
+        sizes,
+        entries,
+        smallerCount,
+        smallerBytes,
+        measuring,
+        limited: job.limited
+      }
+      sender.send(IPC.folderUpdate, update)
+    }
+
+    const queue = (entry: MeasuredEntry, bytes: number): void => {
+      entry.bytes = bytes
+      entry.sized = true
+      if (entry.kind === 'file') fileSizes.set(entry.path, bytes)
+      else dirSizes.set(path.resolve(entry.path), bytes)
+      batch.push({ path: entry.path, bytes })
+      if (batch.length >= 40) {
+        if (flushTimer) clearTimeout(flushTimer)
+        flushTimer = null
+        emit(true, null)
+        return
+      }
+      if (flushTimer) return
+      flushTimer = setTimeout(() => {
+        flushTimer = null
+        if (batch.length > 0) emit(true, null)
+      }, 80)
+    }
+
+    const takeDu = (text: string): void => {
+      pendingLine += text
+      let nl = pendingLine.indexOf('\n')
+      while (nl >= 0) {
+        const line = pendingLine.slice(0, nl).trim()
+        pendingLine = pendingLine.slice(nl + 1)
+        nl = pendingLine.indexOf('\n')
+        const cleaned = line.replace(/^[^\d]+/, '')
+        const tab = cleaned.indexOf('\t')
+        if (tab <= 0) continue
+        const blocks = Number(cleaned.slice(0, tab))
+        const entryPath = cleaned.slice(tab + 1).trim()
+        if (!Number.isFinite(blocks) || !entryPath) continue
+        const bytes = blocks * 1024
+        const resolved = path.resolve(entryPath)
+        if (resolved === path.resolve(folder)) {
+          job.bytes = bytes
+          job.bytesFromDu = true
+          if (flushTimer) clearTimeout(flushTimer)
+          flushTimer = null
+          emit(true, null)
+          continue
+        }
+        dirSizes.set(resolved, bytes)
+        const base = path.basename(resolved)
+        const named = job.entries.filter((entry) => entry.kind !== 'file' && path.basename(entry.path) === base)
+        const known = previewPaths.get(resolved) ?? (named.length === 1 ? named[0] : undefined)
+        if (known && known.kind !== 'file') queue(known, bytes)
+      }
+    }
+
+    try {
+      await Promise.all([
+        pool(files, 24, async (file) => {
+          if (!current()) return
+          try {
+            const stat = await fs.lstat(file.path)
+            queue(file, stat.isDirectory() ? 0 : stat.size)
+          } catch {
+            queue(file, 0)
+          }
+        }),
+        directories.length === 0
+          ? Promise.resolve()
+          : (async () => {
+              const runDu = async (): Promise<boolean> => {
+                // script gives du a terminal, so each folder is printed when it finishes instead of all at once.
+                const result = await streamCommand(
+                  'script',
+                  ['-q', '/dev/null', 'du', '-d', '1', '-k', folder],
+                  120_000,
+                  this.track,
+                  this.release,
+                  current,
+                  takeDu,
+                  true
+                )
+                if (pendingLine.trim()) takeDu('\n')
+                pendingLine = ''
+                job.limited = job.limited || limitedOutput(result.stderr)
+                return result.timedOut
+              }
+              if ((await runDu()) && current()) await runDu()
+            })()
+      ])
+    } catch {
+      job.limited = true
+    }
+
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = null
+    closed = true
+    if (!current()) return null
+
+    let unresolved = false
+    for (const entry of job.entries) {
+      if (entry.sized) continue
+      const recorded = recordedSize(entry, fileSizes, dirSizes)
+      const known = recorded ?? this.knownSize(entry.path)
+      if (known === undefined) {
+        unresolved = true
+        continue
+      }
+      entry.bytes = known
+      entry.sized = true
+    }
+    if (!job.bytesFromDu) {
+      job.bytes = job.entries.reduce((sum, entry) => sum + (entry.sized ? entry.bytes : 0), 0)
+    }
+    job.entries.sort((a, b) => b.bytes - a.bytes || byName(a, b))
+    const complete = !unresolved
+    job.measuring = false
+    const listing = this.snapshot(job, complete)
+    this.rememberFolder(listing)
+    for (const entry of job.entries) {
+      if (entry.sized) this.noteSize(entry.path, entry.bytes)
+    }
+    if (complete || job.bytesFromDu) this.bubble(folder, job.bytes)
+    this.scheduleSave(job, complete)
+
+    const result = this.listingResult(folder, job.self, listing, false, token)
+    for (const entry of result.listing.entries) this.addRecord(entry.path, entry)
+    batch = []
+    closed = false
+    emit(false, result.listing.entries, result.listing.smallerCount, result.listing.smallerBytes)
+    closed = true
+    if (this.running.get(folder) === job) this.running.delete(folder)
+    return result
+  }
+
+  // A folder measured by opening it also fills that row in the folder it sits in.
+  private bubble(childPath: string, bytes: number): void {
+    this.noteSize(childPath, bytes)
+    const parentPath = path.dirname(childPath)
+    if (!parentPath || parentPath === childPath) return
+    const parent = this.running.get(parentPath)
+    if (parent && parent.generation === this.generation) {
+      const entry = parent.entries.find((item) => item.path === childPath)
+      if (!entry) return
+      entry.bytes = bytes
+      entry.sized = true
+      if (!parent.bytesFromDu) {
+        parent.bytes = parent.entries.reduce((sum, item) => sum + (item.sized ? item.bytes : 0), 0)
+      }
+      this.pushSize(parent.sender, parent.path, parent.token, parent.bytes, entry.path, bytes, parent.measuring, parent.limited)
+      this.scheduleSave(parent)
+      return
+    }
+    const saved = this.folderListing(parentPath)
+    if (!saved || path.resolve(saved.path) !== path.resolve(parentPath)) return
+    const row = saved.entries.find((item) => item.path === childPath)
+    if (!row) return
+    row.bytes = bytes
+    row.sized = true
+    if (saved.entries.every((item) => item.sized)) saved.complete = true
+    const token = this.listingTokens.get(parentPath) ?? 0
+    this.pushSize(this.listener, parentPath, token, saved.bytes, childPath, bytes, false, saved.limited)
+    try {
+      this.saveFolder?.({
+        path: saved.path,
+        bytes: saved.bytes,
+        limited: saved.limited,
+        complete: saved.complete,
+        entries: saved.entries.map((item) => ({
+          name: item.name,
+          path: item.path,
+          bytes: item.bytes,
+          kind: item.kind,
+          sized: item.sized === true
+        }))
+      })
+    } catch {
+      // The size is still in memory for this visit.
+    }
+  }
+
+  private pushSize(
+    sender: WebContents | undefined,
+    folder: string,
+    token: number,
+    folderBytes: number,
+    entryPath: string,
+    bytes: number,
+    measuring: boolean,
+    limited: boolean
+  ): void {
+    if (!sender || sender.isDestroyed()) return
+    const update: FolderUpdate = {
+      path: folder,
+      token,
+      bytes: folderBytes,
+      sizes: [{ path: entryPath, bytes }],
+      entries: null,
+      smallerCount: 0,
+      smallerBytes: 0,
+      measuring,
+      limited
+    }
+    sender.send(IPC.folderUpdate, update)
+  }
+
+  private snapshot(job: RunningJob, complete: boolean): CachedListing {
+    return {
+      path: job.path,
+      bytes: job.bytes,
+      entries: job.entries.map((entry) => ({ ...entry })),
+      limited: job.limited,
+      complete,
+      full: true
+    }
+  }
+
+  private scheduleSave(job: RunningJob, done?: boolean): void {
+    const write = (): void => {
+      if (job.generation !== this.generation) return
+      if (done === undefined && this.running.get(job.path) !== job) return
+      const listing = this.snapshot(job, done === true)
+      this.rememberFolder(listing)
+      try {
+        this.saveFolder?.({
+          path: listing.path,
+          bytes: listing.bytes,
+          limited: listing.limited,
+          complete: listing.complete,
+          entries: listing.entries.map((entry) => ({
+            name: entry.name,
+            path: entry.path,
+            bytes: entry.bytes,
+            kind: entry.kind,
+            sized: entry.sized === true
+          }))
+        })
+      } catch {
+        // The sizes are still in memory for this visit.
+      }
+    }
+    if (done !== undefined) {
+      if (job.saveTimer) clearTimeout(job.saveTimer)
+      job.saveTimer = null
+      write()
+      return
+    }
+    if (job.saveTimer) return
+    job.saveTimer = setTimeout(() => {
+      job.saveTimer = null
+      write()
+    }, 400)
+  }
+
+  private rememberFolder(listing: CachedListing): void {
+    for (const key of pathKeys(listing.path)) this.folders.set(key, listing)
+  }
+
+  private folderListing(filePath: string): CachedListing | undefined {
+    for (const key of pathKeys(filePath)) {
+      const listing = this.folders.get(key)
+      if (listing) return listing
+    }
+    return undefined
+  }
+
+  private reuseSizes(preview: MeasuredEntry[], saved: MeasuredEntry[]): void {
+    const prior = new Map(saved.map((entry) => [entry.path, entry]))
+    for (const entry of preview) {
+      const old = prior.get(entry.path)
+      if (!old?.sized) continue
+      entry.bytes = old.bytes
+      entry.sized = true
+    }
+  }
+
+  private dropRunning(prefix?: string): void {
+    for (const [folder, job] of this.running) {
+      const related =
+        !prefix || folder === prefix || folder.startsWith(`${prefix}/`) || prefix.startsWith(`${folder}/`)
+      if (!related) continue
+      if (job.saveTimer) clearTimeout(job.saveTimer)
+      job.saveTimer = null
+      this.running.delete(folder)
     }
   }
 
@@ -389,12 +888,27 @@ export class Scanner {
     sender.send(IPC.scanEvent, event)
   }
 
-  private track = (child: ChildProcess): void => {
+  private track = (child: ChildProcess, group = false): void => {
     this.processes.add(child)
+    if (group) this.groups.add(child)
+  }
+
+  private stopChild(child: ChildProcess): void {
+    if (this.groups.has(child) && child.pid) {
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
+    } else {
+      child.kill('SIGKILL')
+    }
+    this.groups.delete(child)
   }
 
   private release = (child: ChildProcess): void => {
     this.processes.delete(child)
+    this.groups.delete(child)
   }
 
   private async real(filePath: string): Promise<string | null> {
@@ -462,6 +976,19 @@ export class Scanner {
         listed.some((item) => item === form || item.startsWith(`${form}/`) || form.startsWith(`${item}/`))
       )
       if (related) this.listings.delete(key)
+    }
+    for (const key of [...this.folders.keys()]) {
+      const listing = this.folders.get(key)
+      if (!listing) continue
+      if (listing.path === realPath || listing.path.startsWith(`${realPath}/`) || realPath.startsWith(`${listing.path}/`)) {
+        this.folders.delete(key)
+      }
+    }
+    this.dropRunning(realPath)
+    try {
+      this.removeFolder?.(realPath)
+    } catch {
+      // The in-memory listing is already gone.
     }
   }
 
@@ -534,7 +1061,9 @@ export class Scanner {
         path: spec.path,
         bytes: parsed.total,
         entries,
-        limited: limitedOutput(result.stderr) || result.timedOut
+        limited: limitedOutput(result.stderr) || result.timedOut,
+        complete: true,
+        full: false
       })
     }
     this.noteSize(spec.path, parsed.total)
@@ -590,7 +1119,11 @@ export class Scanner {
     }
   }
 
-  private toFolderEntry(entry: MeasuredEntry, parent: { verdict: Verdict; trashable: boolean }): FolderEntry {
+  private toFolderEntry(
+    entry: MeasuredEntry,
+    parent: { verdict: Verdict; trashable: boolean },
+    measured: boolean
+  ): FolderEntry {
     const classified = classifyEntry(entry.name, entry.path, parent)
     // A path the scan already labelled keeps that label, so browsing a parent cannot loosen or tighten it.
     const known = lookupRecord(this.registry, entry.path)
@@ -605,7 +1138,8 @@ export class Scanner {
       kind: entry.kind,
       verdict: classified.verdict,
       summary: classified.summary,
-      trashable: classified.trashable
+      trashable: classified.trashable,
+      measured
     }
   }
 
@@ -628,54 +1162,6 @@ export class Scanner {
         found.push({ name: file.name, path: full, bytes: stat.size, kind: 'file' })
       } catch {
         // Unreadable file. The folder total still includes what du could see.
-      }
-    })
-    return found
-  }
-
-  private async readListing(folder: string, generation: number): Promise<CachedListing | null> {
-    const result = await runCommand('du', ['-d', '1', '-k', folder], 25_000, this.track, this.release, () => generation === this.generation)
-    if (generation !== this.generation) return null
-    const parsed = parseDu(result.stdout, folder)
-    const files = await this.notableFiles(folder, generation)
-    if (generation !== this.generation) return null
-    const merged = new Map<string, MeasuredEntry>()
-    for (const dir of parsed.dirs) {
-      const name = path.basename(dir.path)
-      if (!name) continue
-      merged.set(path.resolve(dir.path), { name, path: dir.path, bytes: dir.bytes, kind: entryKind(name, false) })
-    }
-    for (const file of files) merged.set(path.resolve(file.path), file)
-    const listing: CachedListing = {
-      path: folder,
-      bytes: parsed.total,
-      entries: [...merged.values()].sort((a, b) => b.bytes - a.bytes),
-      limited: limitedOutput(result.stderr) || result.timedOut
-    }
-    this.rememberListing(listing)
-    this.noteSize(folder, parsed.total)
-    return listing
-  }
-
-  private async notableFiles(dir: string, generation: number): Promise<MeasuredEntry[]> {
-    let dirents: Dirent[]
-    try {
-      dirents = await fs.readdir(dir, { withFileTypes: true })
-    } catch {
-      return []
-    }
-    const files = dirents.filter((entry) => entry.isFile())
-    if (files.length === 0 || files.length > 500) return []
-    const found: MeasuredEntry[] = []
-    await pool(files, 16, async (file) => {
-      if (generation !== this.generation) return
-      try {
-        const full = path.join(dir, file.name)
-        const stat = await fs.lstat(full)
-        if (!stat.isFile() || stat.size < 1_000_000) return
-        found.push({ name: file.name, path: full, bytes: stat.size, kind: 'file' })
-      } catch {
-        // Skip unreadable files.
       }
     })
     return found

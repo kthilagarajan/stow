@@ -94,7 +94,7 @@ export function GoToDialog({
                 Cancel
               </button>
               <button type="submit" disabled={busy || !value.trim()} className={buttonVariants()}>
-                {busy ? 'Measuring…' : 'Go'}
+                {busy ? 'Opening…' : 'Go'}
               </button>
             </span>
           </div>

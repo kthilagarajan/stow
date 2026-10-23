@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { FileIcon } from '@/components/common/FileIcon'
+import { Skeleton } from '@/components/common/Skeletons'
 import { Metadata } from '@/components/inspector/Metadata'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -50,6 +51,7 @@ export function Inspector({
         canReveal={focus.canReveal}
         canOpen={focus.canOpen}
         kind={focus.kind}
+        measuring={focus.measuring}
         entries={focus.entries}
         busyPath={busyPath}
         actionError={actionError}
@@ -206,6 +208,7 @@ function DetailCard({
   canReveal,
   canOpen,
   kind,
+  measuring = false,
   entries,
   busyPath,
   actionError,
@@ -236,7 +239,9 @@ function DetailCard({
             <TooltipContent>{style.instruction}</TooltipContent>
           </Tooltip>
         </div>
-        <p className="font-mono text-sm">{formatBytes(bytes)}</p>
+        <p className="font-mono text-sm">
+          {measuring && bytes === 0 ? <Skeleton className="inline-block h-4 w-16 align-middle" /> : formatBytes(bytes)}
+        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-mist break-all font-mono text-[11px] leading-relaxed">{path}</p>

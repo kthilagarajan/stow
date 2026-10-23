@@ -9,7 +9,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts",
+    "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts && tsx src/shared/listing.test.ts",
     "dist": "electron-vite build && electron-builder --mac --publish never",
     "demo": "STOW_DEMO=1 electron-vite dev"
   },

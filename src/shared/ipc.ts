@@ -13,6 +13,7 @@ export const IPC = {
   info: 'item:info',
   openFolder: 'folder:open',
   goTo: 'folder:go',
+  folderUpdate: 'folder:update',
   pickFolder: 'folder:pick',
   setTheme: 'theme:set',
   fileIcons: 'icons:files',

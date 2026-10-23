@@ -55,5 +55,6 @@ export interface FocusDetail {
   canReveal: boolean
   canOpen: boolean
   kind?: FolderEntry['kind']
+  measuring?: boolean
   entries?: { name: string; bytes: number; verdict: Verdict; summary: string }[]
 }

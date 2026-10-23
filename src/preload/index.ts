@@ -3,7 +3,9 @@ import type {
   AppMeta,
   AssistantResult,
   AssistantTarget,
+  FileIconSet,
   FolderResult,
+  FolderUpdate,
   ItemInfo,
   SavedScan,
   ScanEvent,
@@ -29,6 +31,13 @@ const api: StowApi = {
   trashMany: (paths) => ipcRenderer.invoke(IPC.trashMany, paths) as Promise<TrashBatchResult>,
   openFolder: (filePath) => ipcRenderer.invoke(IPC.openFolder, filePath) as Promise<FolderResult>,
   goTo: (filePath) => ipcRenderer.invoke(IPC.goTo, filePath) as Promise<FolderResult>,
+  onFolderUpdate: (listener) => {
+    const wrapped = (_event: IpcRendererEvent, update: FolderUpdate) => listener(update)
+    ipcRenderer.on(IPC.folderUpdate, wrapped)
+    return () => {
+      ipcRenderer.removeListener(IPC.folderUpdate, wrapped)
+    }
+  },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<string | null>,
   info: (filePath) => ipcRenderer.invoke(IPC.info, filePath) as Promise<ItemInfo | null>,
   setTheme: (choice: ThemeChoice) => ipcRenderer.invoke(IPC.setTheme, choice) as Promise<void>,
@@ -50,7 +59,7 @@ const api: StowApi = {
       ipcRenderer.removeListener(IPC.updateRequested, wrapped)
     }
   },
-  fileIcons: (paths) => ipcRenderer.invoke(IPC.fileIcons, paths) as Promise<Record<string, string>>,
+  fileIcons: (paths) => ipcRenderer.invoke(IPC.fileIcons, paths) as Promise<Record<string, FileIconSet>>,
   ask: (target: AssistantTarget, prompt: string) => ipcRenderer.invoke(IPC.ask, target, prompt) as Promise<AssistantResult>,
   onEvent: (listener) => {
     const wrapped = (_event: IpcRendererEvent, payload: ScanEvent) => listener(payload)

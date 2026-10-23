@@ -9,6 +9,23 @@ export interface VolumeInfo {
 
 export type EntryKind = 'folder' | 'file' | 'app'
 
+export interface SavedFolderEntry {
+  name: string
+  path: string
+  bytes: number
+  kind: EntryKind
+  sized: boolean
+}
+
+// A folder Stow has listed, including sizes that are still arriving. Stored so leaving the folder does not throw the work away.
+export interface SavedFolder {
+  path: string
+  bytes: number
+  limited: boolean
+  complete: boolean
+  entries: SavedFolderEntry[]
+}
+
 export interface StorageChild {
   name: string
   path: string
@@ -81,6 +98,8 @@ export interface FolderEntry {
   verdict: Verdict
   summary: string
   trashable: boolean
+  // False while this row's size is still on its way. bytes is 0 until then.
+  measured: boolean
 }
 
 export interface FolderListing {
@@ -94,6 +113,29 @@ export interface FolderListing {
   smallerCount: number
   smallerBytes: number
   limited: boolean
+  // True until sizes for this visit have finished arriving.
+  measuring: boolean
+  // Ties a listing to the measurement that produced it, so a slower older pass cannot overwrite a newer one.
+  token: number
+}
+
+// A batch of sizes for a folder that is already on screen, or the finished list.
+export interface FolderUpdate {
+  path: string
+  token: number
+  bytes: number
+  sizes: { path: string; bytes: number }[]
+  entries: FolderEntry[] | null
+  smallerCount: number
+  smallerBytes: number
+  measuring: boolean
+  limited: boolean
+}
+
+// Finder icons drawn for both appearances. The window picks one from the current theme.
+export interface FileIconSet {
+  light: string
+  dark: string
 }
 
 export type FolderResult = { ok: true; listing: FolderListing } | { ok: false; error: string }
@@ -145,6 +187,7 @@ export interface StowApi {
   trashMany: (paths: string[]) => Promise<TrashBatchResult>
   openFolder: (filePath: string) => Promise<FolderResult>
   goTo: (filePath: string) => Promise<FolderResult>
+  onFolderUpdate: (listener: (update: FolderUpdate) => void) => () => void
   pickFolder: () => Promise<string | null>
   info: (filePath: string) => Promise<ItemInfo | null>
   setTheme: (choice: ThemeChoice) => Promise<void>
@@ -155,7 +198,7 @@ export interface StowApi {
   onUpdateProgress: (listener: (progress: UpdateProgress) => void) => () => void
   // The app menu's Check for Updates… item.
   onUpdateRequested: (listener: () => void) => () => void
-  fileIcons: (paths: string[]) => Promise<Record<string, string>>
+  fileIcons: (paths: string[]) => Promise<Record<string, FileIconSet>>
   ask: (target: AssistantTarget, prompt: string) => Promise<AssistantResult>
   onEvent: (listener: (event: ScanEvent) => void) => () => void
 }

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { addToTrash, applyTrash, clearTrash, freedBytes } from '../shared/items'
 import type { TrashedPath } from './scanner'
-import type { SavedScan, StorageChild, StorageItem, Verdict } from '../shared/types'
+import type { EntryKind, SavedFolder, SavedFolderEntry, SavedScan, StorageChild, StorageItem, Verdict } from '../shared/types'
 
 const VERDICTS = new Set<Verdict>(['mandatory', 'keep', 'optional', 'clear'])
 
@@ -21,6 +21,13 @@ export function openStore(): void {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       scanned_at INTEGER NOT NULL,
       limited INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS folder (
+      path TEXT PRIMARY KEY,
+      bytes INTEGER NOT NULL,
+      limited INTEGER NOT NULL,
+      complete INTEGER NOT NULL,
+      entries TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS item (
       id TEXT PRIMARY KEY,
@@ -106,6 +113,45 @@ export function clearMeasuredTrash(): void {
   writeScan({ ...current, items: clearTrash(current.items) })
 }
 
+export function readFolders(): SavedFolder[] {
+  const database = db
+  if (!database) return []
+  const rows = database.prepare('SELECT path, bytes, limited, complete, entries FROM folder').all() as unknown as FolderRow[]
+  return rows.flatMap((row) => {
+    if (typeof row.path !== 'string' || !row.path) return []
+    return [
+      {
+        path: row.path,
+        bytes: Number(row.bytes) || 0,
+        limited: row.limited === 1,
+        complete: row.complete === 1,
+        entries: parseFolderEntries(row.entries)
+      }
+    ]
+  })
+}
+
+export function saveFolder(folder: SavedFolder): void {
+  const database = db
+  if (!database || !folder.path) return
+  database
+    .prepare(
+      `INSERT INTO folder (path, bytes, limited, complete, entries) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, limited = excluded.limited, complete = excluded.complete, entries = excluded.entries`
+    )
+    .run(folder.path, folder.bytes, folder.limited ? 1 : 0, folder.complete ? 1 : 0, JSON.stringify(folder.entries))
+}
+
+export function deleteFolder(folderPath: string): void {
+  const database = db
+  if (!database || !folderPath) return
+  const rows = database.prepare('SELECT path FROM folder').all() as unknown as { path: string }[]
+  const remove = database.prepare('DELETE FROM folder WHERE path = ?')
+  for (const row of rows) {
+    if (row.path === folderPath || row.path.startsWith(`${folderPath}/`)) remove.run(row.path)
+  }
+}
+
 export function persistTrash(moved: TrashedPath[]): void {
   const current = readScan()
   if (!current || moved.length === 0) return
@@ -115,6 +161,30 @@ export function persistTrash(moved: TrashedPath[]): void {
     items = addToTrash(applyTrash(items, entry.path, entry.bytes), bytes)
   }
   writeScan({ ...current, items })
+}
+
+interface FolderRow {
+  path: string
+  bytes: number
+  limited: number
+  complete: number
+  entries: string
+}
+
+function parseFolderEntries(raw: string): SavedFolderEntry[] {
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!Array.isArray(value)) return []
+    return value.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return []
+      const row = entry as Partial<SavedFolderEntry>
+      if (typeof row.name !== 'string' || typeof row.path !== 'string') return []
+      const kind: EntryKind = row.kind === 'file' || row.kind === 'app' ? row.kind : 'folder'
+      return [{ name: row.name, path: row.path, bytes: Number(row.bytes) || 0, kind, sized: row.sized === true }]
+    })
+  } catch {
+    return []
+  }
 }
 
 interface ItemRow {

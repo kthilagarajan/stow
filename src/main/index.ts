@@ -1,10 +1,11 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import { isDemo } from './demo'
+import { stopFileIcons } from './icons'
 import { registerIpc } from './ipc'
 import { installMenu } from './menu'
 import { Scanner } from './scanner'
-import { closeStore, openStore, persistTrash, readScan, writeScan } from './store'
+import { closeStore, deleteFolder, openStore, persistTrash, readFolders, readScan, saveFolder, writeScan } from './store'
 import { createWindow, iconFile, installIcon } from './window'
 
 const scanner = new Scanner()
@@ -36,8 +37,10 @@ if (!app.requestSingleInstanceLock()) {
     openStore()
     const saved = readScan()
     if (saved) scanner.hydrate(saved.items)
+    scanner.hydrateFolders(readFolders())
     scanner.setPublisher((items, limited) => writeScan({ scannedAt: Date.now(), limited, items }))
     scanner.setTrashRecorder(persistTrash)
+    scanner.setFolderStore(saveFolder, deleteFolder)
     registerIpc(scanner)
     createWindow()
     app.on('activate', () => {
@@ -47,6 +50,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     scanner.stop()
+    stopFileIcons()
     closeStore()
     app.quit()
   })

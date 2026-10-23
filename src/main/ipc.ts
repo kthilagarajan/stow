@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { IPC } from '../shared/ipc'
 import { openAssistant, type AssistantTarget } from './assistant'
-import { fileIcons } from './icons'
+import { fileIcons, warmFileIcons } from './icons'
 import { demoIcons, demoInfo, demoListing, demoScan, demoVolume, isDemo } from './demo'
 import { itemInfo } from './info'
 import { checkForUpdate, downloadUpdate, openDownloaded, openReleasePage } from './updates'
@@ -12,6 +12,7 @@ import { windowBackground } from './window'
 
 // The main process side of window.stow. Every handler checks its arguments: the page is not trusted.
 export function registerIpc(scanner: Scanner): void {
+  warmFileIcons()
   ipcMain.handle(IPC.checkUpdate, () => checkForUpdate())
   ipcMain.handle(IPC.downloadUpdate, (event) =>
     downloadUpdate((progress) => {
@@ -49,13 +50,13 @@ export function registerIpc(scanner: Scanner): void {
     if (!Array.isArray(paths)) return { trashed: [], error: 'Nothing was selected.' }
     return scanner.trashMany(paths.filter((entry): entry is string => typeof entry === 'string'))
   })
-  ipcMain.handle(IPC.openFolder, (_event, filePath: unknown) => {
+  ipcMain.handle(IPC.openFolder, (event, filePath: unknown) => {
     if (typeof filePath !== 'string') return { ok: false, error: 'That path is not one Stow measured.' }
-    return scanner.openFolder(filePath)
+    return scanner.openFolder(filePath, event.sender)
   })
-  ipcMain.handle(IPC.goTo, (_event, filePath: unknown) => {
+  ipcMain.handle(IPC.goTo, (event, filePath: unknown) => {
     if (typeof filePath !== 'string') return { ok: false, error: 'Type a folder path, like ~/Projects.' }
-    return scanner.goTo(filePath)
+    return scanner.goTo(filePath, event.sender)
   })
   ipcMain.handle(IPC.setTheme, (event, choice: unknown) => {
     if (choice !== 'system' && choice !== 'light' && choice !== 'dark') return

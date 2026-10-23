@@ -174,6 +174,28 @@ export interface UpdateInfo {
 
 export type UpdateProgress = { received: number; total: number }
 
+export type ActivityKind =
+  | 'scan'
+  | 'folder'
+  | 'trash'
+  | 'empty-bin'
+  | 'volume'
+  | 'saved'
+  | 'info'
+  | 'icons'
+  | 'update'
+  | 'download'
+
+// Work running in the background. The window words it from `kind`; `target` is a name as it is on disk.
+export interface ActivityTask {
+  id: number
+  kind: ActivityKind
+  target?: string
+  done?: number
+  total?: number
+  startedAt: number
+}
+
 export type UpdateDownload = { ok: true; file: string } | { ok: false; error: string }
 
 export interface StowApi {
@@ -201,4 +223,6 @@ export interface StowApi {
   fileIcons: (paths: string[]) => Promise<Record<string, FileIconSet>>
   ask: (target: AssistantTarget, prompt: string) => Promise<AssistantResult>
   onEvent: (listener: (event: ScanEvent) => void) => () => void
+  activity: () => Promise<ActivityTask[]>
+  onActivity: (listener: (tasks: ActivityTask[]) => void) => () => void
 }

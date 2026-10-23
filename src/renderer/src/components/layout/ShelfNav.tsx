@@ -1,7 +1,8 @@
 import type { SegmentTotals } from '@shared/segments'
-import type { StorageItem } from '@shared/types'
+import type { ActivityTask, StorageItem } from '@shared/types'
 import { Trash2 } from 'lucide-react'
 import { Skeleton } from '@/components/common/Skeletons'
+import { ActivityStatus } from '@/components/layout/ActivityStatus'
 import { formatBytes } from '@/lib/format'
 import { shelves, type ShelfId } from '@/lib/verdicts'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,7 @@ export function ShelfNav({
   trashBytes,
   emptying,
   loading,
+  activity,
   onEmptyTrash
 }: {
   active: ShelfId
@@ -34,6 +36,7 @@ export function ShelfNav({
   trashBytes: number
   emptying: boolean
   loading: boolean
+  activity: ActivityTask[]
   onEmptyTrash: () => void
 }) {
   return (
@@ -71,6 +74,7 @@ export function ShelfNav({
         })}
       </ul>
       <div className="mt-auto px-1 pt-4">
+        <ActivityStatus tasks={activity} />
         <button
           type="button"
           onClick={onEmptyTrash}

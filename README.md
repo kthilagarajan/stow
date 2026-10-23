@@ -75,7 +75,7 @@ Scanning, sizes and file details stay on your Mac. The only network requests Sto
 
 ## Develop
 
-Requires macOS and Node 22 or later. Stow keeps its scan in `node:sqlite`.
+Requires macOS, Node 22 or later, and Rust. Stow keeps its scan in sqlite (`stow.sqlite` in the app's user data folder).
 
 ```bash
 npm install
@@ -86,14 +86,15 @@ npm run dev
 | --- | --- |
 | `npm run dev` | Runs the app with hot reload |
 | `npm run demo` | Runs the app with made-up data and a separate profile, for screenshots |
-| `npm run typecheck` | Type-checks the main process, preload and renderer |
+| `npm run typecheck` | Type-checks the renderer and shared TypeScript |
 | `npm test` | Runs the unit tests in `src/shared` |
-| `npm run build` | Builds into `out/` |
-| `npm run dist` | Builds disk images and zips for both chips into `dist/` |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | Runs the Rust unit tests |
+| `npm run build` | Builds the Mac app with Tauri |
+| `npm run dist` | Builds disk images for both chips |
 
 ### Releases
 
-`.github/workflows/release.yml` typechecks, tests and builds on every push to `main` and every pull request, and keeps the disk images as a downloadable Actions artifact. Pushing a version tag also publishes a GitHub release with the `.dmg` and `.zip` for both chips. The tag must match `version` in `package.json`.
+`.github/workflows/release.yml` typechecks and tests on every push to `main` or `tauri` and every pull request, and builds disk images on `main` and on version tags. Pushing a version tag also publishes a GitHub release with the `.dmg` for both chips. The tag must match `version` in `package.json`.
 
 ```bash
 npm version 0.2.0 --no-git-tag-version   # bump package.json, then commit it
@@ -113,6 +114,6 @@ The website in `site/` is an Astro page published to GitHub Pages by `.github/wo
 
 ### Built with
 
-Electron, React, TypeScript, Tailwind CSS 4, Radix primitives (shadcn/ui style), lucide icons, and the Geist typeface.
+Tauri 2, Rust, React, TypeScript, Tailwind CSS 4, Radix primitives (shadcn/ui style), lucide icons, and the Geist typeface.
 
 See [AGENTS.md](AGENTS.md) for how the code is organized and the rules that keep Stow safe to use.

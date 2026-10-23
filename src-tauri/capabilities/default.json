@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Stow's window can call the app and listen for scan and update events.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}

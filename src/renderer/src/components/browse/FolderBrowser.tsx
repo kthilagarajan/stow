@@ -128,6 +128,9 @@ export function FolderBrowser({
           <p className="text-mist mt-2 flex items-center gap-2 text-xs leading-relaxed" role="status">
             <Skeleton className="size-2 shrink-0 rounded-full" />
             Measuring sizes
+            <span className="font-mono">
+              {frame.entries.filter((entry) => entry.measured).length} of {frame.entries.length}
+            </span>
           </p>
         )}
         {error && <p className="text-coral mt-2 text-sm leading-relaxed">{error}</p>}

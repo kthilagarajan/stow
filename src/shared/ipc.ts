@@ -23,5 +23,6 @@ export const IPC = {
   openDownloaded: 'update:open',
   openReleasePage: 'update:page',
   updateProgress: 'update:progress',
-  updateRequested: 'update:requested'
+  updateRequested: 'update:requested',
+  activity: 'activity:update'
 } as const

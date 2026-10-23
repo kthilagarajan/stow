@@ -13,37 +13,33 @@ export function useStow() {
     if (!api) return
     let cancelled = false
     const unsubscribe = api.onEvent((event) => dispatch({ type: 'event', event }))
-    void (async () => {
-      try {
-        const meta = await api.meta()
+    // Independent reads, so the shelves fill in as soon as each one answers.
+    api
+      .meta()
+      .then((meta) => {
         if (!cancelled) dispatch({ type: 'meta', version: meta.version })
-      } catch {
+      })
+      .catch(() => {
         // The window still works without a version label.
-      }
-      try {
-        const saved = await api.loadScan()
+      })
+    api
+      .loadScan()
+      .then((saved) => {
         if (!cancelled) dispatch({ type: 'saved', scan: saved })
-      } catch (error) {
-        if (!cancelled) {
-          dispatch({ type: 'saved', scan: null })
-          dispatch({
-            type: 'action-error',
-            message: error instanceof Error ? error.message : 'Could not open the last scan.'
-          })
-        }
-      }
-      try {
-        const volume = await api.getVolume()
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        dispatch({ type: 'saved', scan: null })
+        dispatch({ type: 'action-error', message: error instanceof Error ? error.message : 'Could not open the last scan.' })
+      })
+    api
+      .getVolume()
+      .then((volume) => {
         if (!cancelled) dispatch({ type: 'volume', volume })
-      } catch (error) {
-        if (!cancelled) {
-          dispatch({
-            type: 'volume-error',
-            message: error instanceof Error ? error.message : 'Could not read the disk.'
-          })
-        }
-      }
-    })()
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) dispatch({ type: 'volume-error', message: error instanceof Error ? error.message : 'Could not read the disk.' })
+      })
     return () => {
       cancelled = true
       unsubscribe()

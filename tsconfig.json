@@ -16,5 +16,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client"]
   },
-  "include": ["src/**/*", "electron.vite.config.ts"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*", "vite.config.ts"]
 }

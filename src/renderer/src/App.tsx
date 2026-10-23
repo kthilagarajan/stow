@@ -15,6 +15,7 @@ import { ShelfNav } from '@/components/layout/ShelfNav'
 import { StorageWall } from '@/components/layout/StorageWall'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useActivity } from '@/hooks/useActivity'
 import { useBrowse } from '@/hooks/useBrowse'
 import { useShortcut } from '@/hooks/useShortcut'
 import { useCompact } from '@/hooks/useStoredFlag'
@@ -27,6 +28,7 @@ export function App() {
   const { available, state, busyPath, emptying, reveal, trashMany, emptyTrash, rescan } = useStow()
   const browse = useBrowse()
   const update = useUpdate()
+  const activity = useActivity()
   const [shelf, setShelf] = useState<ShelfId>('everything')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trashTargets, setTrashTargets] = useState<TrashTarget[] | null>(null)
@@ -110,6 +112,7 @@ export function App() {
             trashBytes={trashItem?.bytes ?? 0}
             loading={!state.loaded || !state.volume}
             emptying={emptying}
+            activity={activity}
             onEmptyTrash={() => setConfirmEmpty(true)}
           />
           <main className="bg-sheet flex min-h-0 min-w-0 flex-col rounded-2xl">

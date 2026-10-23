@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "description": "See what your Mac is holding, and what it can let go.",
-  "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "vite:dev": "vite",
+    "vite:build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts && tsx src/shared/listing.test.ts",
-    "dist": "electron-vite build && electron-builder --mac --publish never",
-    "demo": "STOW_DEMO=1 electron-vite dev"
+    "dist": "tauri build",
+    "demo": "STOW_DEMO=1 tauri dev"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -27,59 +27,20 @@
     "lucide-react": "*",
     "react": "*",
     "react-dom": "*",
-    "tailwind-merge": "*"
+    "tailwind-merge": "*",
+    "@tauri-apps/api": "^2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "*",
+    "@tauri-apps/cli": "^2",
     "@types/node": "*",
     "@types/react": "*",
     "@types/react-dom": "*",
     "@vitejs/plugin-react": "*",
-    "electron": "*",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "*",
     "tailwindcss": "*",
     "tsx": "*",
     "typescript": "*",
     "vite": "*"
-  },
-  "build": {
-    "appId": "com.kthilagarajan.stow",
-    "productName": "Stow",
-    "copyright": "Scanning stays on this Mac.",
-    "npmRebuild": false,
-    "asar": true,
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out/**/*",
-      "build/icon.png",
-      "build/icon.icns",
-      "package.json"
-    ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "icon": "build/icon.icns",
-      "identity": null,
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ]
-    },
-    "artifactName": "${productName}-${version}-${arch}.${ext}"
   },
   "repository": {
     "type": "git",

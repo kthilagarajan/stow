@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { applyTheme, storedTheme } from './lib/theme'
+import './lib/bridge'
 import './index.css'
 
 // Before the first paint, so a dark window never flashes light.

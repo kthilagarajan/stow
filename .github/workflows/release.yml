@@ -1,21 +1,21 @@
 name: Release
 
-# Every push to main builds the Mac app as a downloadable Actions artifact.
-# A version tag (v1.2.3, matching package.json) also publishes a GitHub release
-# with the disk images, which installed copies of Stow offer as an update.
+# Pushes to main and tauri typecheck and test. Disk images are built on main
+# and on a version tag. A tag (v1.2.3, matching package.json) also publishes
+# a GitHub release. The tauri branch does not publish.
 on:
   push:
-    branches: [main]
+    branches: [main, tauri]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, tauri]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  check:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,22 +23,35 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: dtolnay/rust-toolchain@stable
       - name: Verify release version
         if: startsWith(github.ref, 'refs/tags/')
         run: node -e "if ('v' + require('./package.json').version !== process.env.GITHUB_REF_NAME) { console.error('Tag ' + process.env.GITHUB_REF_NAME + ' does not match package.json version ' + require('./package.json').version); process.exit(1) }"
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  build:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
       - name: Build the Mac app
         run: npm run dist
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CI: true
       - uses: actions/upload-artifact@v4
         with:
           name: Stow-mac
-          path: |
-            dist/*.dmg
-            dist/*.zip
+          path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
   publish:
@@ -57,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           NOTES: |
-            Download the disk image for your Mac: **arm64** for Apple silicon, **x64** for Intel. Open it and drag Stow to Applications.
+            Download the disk image for your Mac: **aarch64** for Apple silicon, **x86_64** for Intel. Open it and drag Stow to Applications.
 
             Stow is not notarized by Apple yet, so clear the download flag once before the first launch:
 

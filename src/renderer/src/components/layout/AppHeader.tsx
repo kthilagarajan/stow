@@ -39,15 +39,16 @@ export function AppHeader({
 
   return (
     // pl-24 leaves room for the macOS traffic lights; the row is 36px tall so it lines up with them.
-    <header className="drag relative flex items-center justify-between gap-4 px-5 pt-3 pb-3 pl-24">
-      <div className="flex items-center gap-3">
-        <img src={mark} alt="" width={36} height={36} draggable={false} className="size-9" />
-        <div>
-          <p className="font-display text-[22px] leading-none tracking-tight">Stow</p>
-          <p className="text-mist mt-1 text-xs leading-none">What can go, and what stays</p>
+    // Tauri only drags from the element that was pressed, so every non-interactive piece carries the attribute.
+    <header data-tauri-drag-region className="relative flex items-center justify-between gap-4 px-5 pt-3 pb-3 pl-24">
+      <div data-tauri-drag-region className="flex items-center gap-3">
+        <img data-tauri-drag-region src={mark} alt="" width={36} height={36} draggable={false} className="size-9" />
+        <div data-tauri-drag-region>
+          <p data-tauri-drag-region className="font-display text-[22px] leading-none tracking-tight">Stow</p>
+          <p data-tauri-drag-region className="text-mist mt-1 text-xs leading-none">What can go, and what stays</p>
         </div>
       </div>
-      <div className="no-drag flex items-center gap-2">
+      <div className="flex items-center gap-2">
         {update && (
           <Tooltip>
             <TooltipTrigger asChild>

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { applyFolderProgress, mergeListing, noteFolderUpdate, type FolderProgress } from './listing'
+import { applyFolderProgress, mergeListing, noteFolderUpdate, orderEntries, type FolderProgress } from './listing'
 import type { FolderEntry, FolderListing, FolderUpdate } from './types'
 
 function entry(name: string, bytes = 0, measured = false): FolderEntry {
@@ -110,5 +110,9 @@ assert.equal(kept.entries[1]?.measured, true)
 const newer = mergeListing(measured, listing([entry('src', 9000, true), entry('readme.md')]))
 assert.equal(newer.entries[0]?.bytes, 9000)
 assert.equal(newer.entries[1]?.bytes, 1200)
+
+// Measured rows lead by size; rows still waiting follow by name, with numbers in number order.
+const ordered = orderEntries([entry('b'), entry('a10'), entry('small', 10, true), entry('a2'), entry('big', 900, true), entry('Also', 10, true)])
+assert.deepEqual(ordered.map((item) => item.name), ['big', 'Also', 'small', 'a2', 'a10', 'b'])
 
 console.log('folder updates ok')

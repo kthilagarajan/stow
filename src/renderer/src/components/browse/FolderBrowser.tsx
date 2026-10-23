@@ -7,6 +7,7 @@ import { MultiHint, SelectionBar } from '@/components/browse/SelectionBar'
 import { RowSkeletons, Skeleton } from '@/components/common/Skeletons'
 import { useFileIcons } from '@/hooks/useFileIcons'
 import { isMultiClick, useSelection } from '@/hooks/useSelection'
+import { useSteadyRows } from '@/hooks/useSteadyRows'
 import { formatBytes } from '@/lib/format'
 import { canLookInside, type BrowseFrame } from '@/lib/browse'
 import { verdicts } from '@/lib/verdicts'
@@ -53,6 +54,7 @@ export function FolderBrowser({
 
   const trashable = entries.filter((entry) => entry.trashable)
   const selection = useSelection(trashable.map((entry) => entry.path))
+  const steady = useSteadyRows(entries, Boolean(frame?.measuring))
 
   if (!frame) return null
 
@@ -139,7 +141,7 @@ export function FolderBrowser({
         )}
       </div>
       <div className="relative min-h-0 flex-1">
-        <div className={cn('h-full overflow-auto px-3 pt-1', picked.length > 1 ? 'pb-20' : 'pb-4')}>
+        <div className={cn('h-full overflow-auto px-3 pt-1', picked.length > 1 ? 'pb-20' : 'pb-4')} {...steady.hover}>
           {opening ? (
             <RowSkeletons compact={compact} count={Math.min(8, Math.max(3, entries.length))} label="Measuring the next folder" />
           ) : entries.length === 0 ? (
@@ -147,8 +149,8 @@ export function FolderBrowser({
               {q ? 'Nothing matches that filter.' : 'This folder is empty.'}
             </p>
           ) : (
-            <ul className={cn('flex flex-col', compact ? 'gap-0.5' : 'gap-1.5')}>
-              {entries.map((entry, index) => {
+            <ul ref={steady.list} className={cn('flex flex-col', compact ? 'gap-0.5' : 'gap-1.5')}>
+              {steady.rows.map((entry, index) => {
                 const openable = entry.kind !== 'file' && canLookInside(entry.path)
                 const selected = picked.length > 1 ? selection.has(entry.path) : entry.path === pickedPath
                 return (
@@ -174,7 +176,6 @@ export function FolderBrowser({
                       selection.clear()
                       onPick(again ? null : entry)
                     }}
-                    onDoubleClick={openable ? () => onOpen(entry) : undefined}
                     actions={
                       <>
                         {openable ? (

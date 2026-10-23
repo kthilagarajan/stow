@@ -1,4 +1,16 @@
-import type { FolderListing, FolderUpdate } from './types'
+import type { FolderEntry, FolderListing, FolderUpdate } from './types'
+
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+// Largest first from the moment a folder opens. Rows still being measured wait at the end in name
+// order, so each one moves once, when its size arrives, instead of the whole list flipping at the end.
+export function orderEntries(entries: FolderEntry[]): FolderEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.measured !== b.measured) return a.measured ? -1 : 1
+    if (a.measured && a.bytes !== b.bytes) return b.bytes - a.bytes
+    return byName.compare(a.name, b.name)
+  })
+}
 
 // Sizes seen so far for one visit to a folder. Patches accumulate, so an update that arrives
 // before the listing is on screen is still applied when the listing shows up.

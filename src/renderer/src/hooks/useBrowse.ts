@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FolderEntry } from '@shared/types'
-import { applyFolderProgress, mergeListing, noteFolderUpdate, type FolderProgress } from '@shared/listing'
+import { applyFolderProgress, mergeListing, noteFolderUpdate, orderEntries, type FolderProgress } from '@shared/listing'
 import { applyBrowseTrash, canLookInside, type BrowseFrame, type FocusDetail } from '@/lib/browse'
 
 function paint(frame: BrowseFrame, progress: Map<string, FolderProgress>): BrowseFrame {
   const next = applyFolderProgress(frame, progress.get(`${frame.path}\0${frame.token}`))
-  return { ...frame, ...next, label: frame.label }
+  return { ...frame, ...next, entries: orderEntries(next.entries), label: frame.label }
 }
 
 // Folder browsing: the breadcrumb stack, the row picked inside the current folder, and loading state.

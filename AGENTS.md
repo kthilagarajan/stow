@@ -73,7 +73,7 @@ src-tauri/     Rust: scanning, trashing, persistence, and Tauri commands.
 | `components/dialogs` | Move to Bin, Empty Bin, Go to folder, Ask AI, Update |
 | `components/common` | Shared pieces: `ListRow` and `IconAction`, `Skeleton`s, `FileIcon`, `ActionTile` |
 | `components/ui` | Unstyled-to-themed primitives in the shadcn/ui style. Keep these generic. |
-| `hooks` | `useStow` (scan state and actions), `useBrowse` (folder navigation), `useSelection` (⌘-click picking), `useUpdate` (release checks and download), `useActivity` (background work), `useTheme`, `useShortcut`, `useStoredFlag`, `useFileIcons` |
+| `hooks` | `useStow` (scan state and actions), `useBrowse` (folder navigation), `useSelection` (⌘-click picking), `useSteadyRows` (rows that hold still under the pointer and slide into place), `useUpdate` (release checks and download), `useActivity` (background work), `useTheme`, `useShortcut`, `useStoredFlag`, `useFileIcons` |
 | `lib` | Pure helpers: formatting, verdict styles and shelves, theme, the Bin/Trash word, browse helpers |
 | `state.ts` | The reducer for scan state. The window applies Bin moves optimistically through `@shared/items`. |
 
@@ -104,7 +104,7 @@ To refresh the screenshots, run `npm run demo` and capture the window. Screensho
 - **Colours come from theme tokens only** (`fog`, `sheet`, `raised`, `chrome`, `ink`, `harbor`, `mist`, `line`, `coral`, `amber`, `kelp`, `well`), defined for light and dark mode in `src/renderer/src/index.css`. Do not hard-code hex values or `bg-white` in components. Add a token instead. The only fixed colours are the verdict hues in `lib/verdicts.ts`.
 - **Show loading.** Use `Skeleton`, `RowSkeletons` or `FolderSkeleton` from `components/common/Skeletons.tsx` instead of blank space or "Loading…" text.
 - **Motion** uses the classes in `index.css`: `rise` (staggered rows; pass `index`), `fade-in`, `selection-bar`, and the dialog `pop`. Every animation must be switched off under `prefers-reduced-motion`.
-- **Interaction**: a click selects, a click on the selected row clears it, ⌘-click adds to the selection, and double-click or the arrow opens a folder. Only the details pane and the multi-select bar offer Move to Bin; list rows do not.
+- **Interaction**: a click selects, a click on the selected row clears it, ⌘-click adds to the selection, and the arrow opens a folder. Only the details pane and the multi-select bar offer Move to Bin; list rows do not.
 - **Wording** is plain and calm. Say what will happen and whether there is a way back. Use `BIN` from `lib/bin.ts` for every user-facing "Bin" or "Trash".
 - Fonts are Geist and Geist Mono. Sizes and paths use the mono face.
 - Every clickable element gets a pointer cursor (set globally in `index.css`) and a visible focus ring.

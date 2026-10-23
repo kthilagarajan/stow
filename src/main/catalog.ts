@@ -111,7 +111,7 @@ function xcodeSpec(dir: string, name: string): RootSpec {
   })
 }
 
-function staticRoots(home: string): RootSpec[] {
+export function staticRoots(home: string): RootSpec[] {
   const h = (...parts: string[]) => path.join(home, ...parts)
   return [
     root({

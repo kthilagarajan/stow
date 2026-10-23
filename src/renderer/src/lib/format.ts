@@ -26,3 +26,16 @@ export function formatScannedAt(ms: number): string {
   const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
   return `Last scan ${day} at ${time}`
 }
+
+export function formatDate(ms: number): string {
+  const date = new Date(ms)
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (date >= today) return `Today at ${time}`
+  if (date >= yesterday) return `Yesterday at ${time}`
+  const sameYear = date.getFullYear() === today.getFullYear()
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) }).format(date)
+}

@@ -1,0 +1,26 @@
+// Every channel between the window and the main process. Preload and main both import these,
+// so a renamed channel fails the typecheck instead of failing silently at runtime.
+export const IPC = {
+  meta: 'app:meta',
+  volume: 'volume:get',
+  loadScan: 'scan:load',
+  startScan: 'scan:start',
+  scanEvent: 'scan:event',
+  emptyTrash: 'trash:empty',
+  reveal: 'item:reveal',
+  trash: 'item:trash',
+  trashMany: 'item:trash-many',
+  info: 'item:info',
+  openFolder: 'folder:open',
+  goTo: 'folder:go',
+  pickFolder: 'folder:pick',
+  setTheme: 'theme:set',
+  fileIcons: 'icons:files',
+  ask: 'assistant:open',
+  checkUpdate: 'update:check',
+  downloadUpdate: 'update:download',
+  openDownloaded: 'update:open',
+  openReleasePage: 'update:page',
+  updateProgress: 'update:progress',
+  updateRequested: 'update:requested'
+} as const

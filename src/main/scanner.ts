@@ -8,6 +8,7 @@ import { classifyEntry, classifyLargeFile } from './classify'
 import { discoverRoots, type RootSpec } from './catalog'
 import { describeChild } from './describe'
 import { runCommand } from './exec'
+import { IPC } from '../shared/ipc'
 import { applyTrash } from '../shared/items'
 import { lookupRecord, pathKeys, stricterVerdict, trashDecision, type TrashRecord } from './guard'
 import type {
@@ -110,6 +111,11 @@ function validPath(filePath: unknown): filePath is string {
   return typeof filePath === 'string' && filePath.length > 0 && filePath.length <= 4096 && !filePath.includes('\0')
 }
 
+export interface TrashedPath {
+  path: string
+  bytes: number
+}
+
 export class Scanner {
   private generation = 0
   private processes = new Set<ChildProcess>()
@@ -120,13 +126,13 @@ export class Scanner {
   private removed = new Set<string>()
   private home = os.homedir()
   private publish: ((items: StorageItem[], limited: number) => void) | null = null
-  private rememberTrash: ((paths: string[]) => void) | null = null
+  private rememberTrash: ((moved: TrashedPath[]) => void) | null = null
 
   setPublisher(publish: (items: StorageItem[], limited: number) => void): void {
     this.publish = publish
   }
 
-  setTrashRecorder(remember: (paths: string[]) => void): void {
+  setTrashRecorder(remember: (moved: TrashedPath[]) => void): void {
     this.rememberTrash = remember
   }
 
@@ -243,6 +249,7 @@ export class Scanner {
     const record = lookupRecord(this.registry, filePath) ?? lookupRecord(this.registry, real)
     const decision = trashDecision(real, this.home, record)
     if (!decision.ok) return decision
+    const bytes = this.measuredSize(real)
     try {
       await shell.trashItem(real)
     } catch {
@@ -253,12 +260,12 @@ export class Scanner {
     this.removed.add(real)
     if (options?.persist !== false) {
       try {
-        this.rememberTrash?.([filePath])
+        this.rememberTrash?.([{ path: filePath, bytes: bytes ?? 0 }])
       } catch {
-        return { ok: true }
+        return { ok: true, bytes }
       }
     }
-    return { ok: true }
+    return { ok: true, bytes }
   }
 
   async trashMany(paths: string[]): Promise<TrashBatchResult> {
@@ -268,6 +275,7 @@ export class Scanner {
     unique.sort((a, b) => a.length - b.length)
     const trashed: string[] = []
     const covered: string[] = []
+    const sizes: Record<string, number> = {}
     let error: string | undefined
     for (const filePath of unique) {
       if (covered.some((parent) => filePath === parent || filePath.startsWith(`${parent}/`))) {
@@ -278,16 +286,17 @@ export class Scanner {
       if (result.ok) {
         trashed.push(filePath)
         covered.push(filePath)
+        if (result.bytes !== undefined) sizes[filePath] = result.bytes
       } else if (!error) error = result.error
     }
     if (trashed.length > 0) {
       try {
-        this.rememberTrash?.(trashed)
+        this.rememberTrash?.(covered.map((filePath) => ({ path: filePath, bytes: sizes[filePath] ?? 0 })))
       } catch {
         // The files are already in the Trash. The list updates in the window.
       }
     }
-    return { trashed, error }
+    return { trashed, error, sizes }
   }
 
   async emptyTrash(): Promise<TrashResult> {
@@ -305,6 +314,23 @@ export class Scanner {
     }
     this.forget(path.join(this.home, '.Trash'))
     return { ok: true }
+  }
+
+  // A folder the person typed or picked. Outside the scanned places it starts as "keep", so only the
+  // caches, installers, and dependencies Stow recognises inside it can go to the Trash.
+  async goTo(filePath: string): Promise<FolderResult> {
+    if (!validPath(filePath)) return { ok: false, error: 'Type a folder path, like ~/Projects.' }
+    const expanded = filePath.trim().replace(/^~(?=$|\/)/, this.home)
+    if (!path.isAbsolute(expanded)) return { ok: false, error: 'Start the path with / or ~/.' }
+    const real = await this.real(expanded)
+    if (!real) return { ok: false, error: 'There is no folder at that path.' }
+    try {
+      if (!(await fs.stat(real)).isDirectory()) return { ok: false, error: 'That is a file. Pick the folder it sits in.' }
+    } catch {
+      return { ok: false, error: 'There is no folder at that path.' }
+    }
+    if (!this.owner(real)) this.addRecord(real, { verdict: 'keep', trashable: false })
+    return this.openFolder(real)
   }
 
   async openFolder(filePath: string): Promise<FolderResult> {
@@ -360,7 +386,7 @@ export class Scanner {
   private emit(sender: WebContents, generation: number, event: ScanEvent): void {
     if (generation !== this.generation) return
     if (sender.isDestroyed()) return
-    sender.send('scan:event', event)
+    sender.send(IPC.scanEvent, event)
   }
 
   private track = (child: ChildProcess): void => {
@@ -441,6 +467,13 @@ export class Scanner {
 
   private noteSize(filePath: string, bytes: number): void {
     for (const key of pathKeys(filePath)) this.sizes.set(key, bytes)
+  }
+
+  // The size from the last measurement of this path, either as a measured folder or as a row in its parent's listing.
+  private measuredSize(realPath: string): number | undefined {
+    const known = this.knownSize(realPath)
+    if (known !== undefined) return known
+    return this.cachedListing(path.dirname(realPath))?.entries.find((entry) => entry.path === realPath)?.bytes
   }
 
   private knownSize(filePath: string): number | undefined {
@@ -559,6 +592,12 @@ export class Scanner {
 
   private toFolderEntry(entry: MeasuredEntry, parent: { verdict: Verdict; trashable: boolean }): FolderEntry {
     const classified = classifyEntry(entry.name, entry.path, parent)
+    // A path the scan already labelled keeps that label, so browsing a parent cannot loosen or tighten it.
+    const known = lookupRecord(this.registry, entry.path)
+    if (known) {
+      classified.verdict = known.verdict
+      classified.trashable = known.trashable
+    }
     return {
       name: entry.name,
       path: entry.path,

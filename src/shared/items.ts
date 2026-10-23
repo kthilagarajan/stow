@@ -21,8 +21,9 @@ export function clearTrash(items: StorageItem[]): StorageItem[] {
   })
 }
 
-export function applyTrash(items: StorageItem[], target: string): StorageItem[] {
-  const bytes = freedBytes(items, target)
+// `knownBytes` covers paths deeper than an item's listed children, which `freedBytes` cannot see.
+export function applyTrash(items: StorageItem[], target: string, knownBytes = 0): StorageItem[] {
+  const bytes = freedBytes(items, target) || knownBytes
   return items.flatMap((item) => {
     if (item.path === target) return []
     const child = item.children.find((entry) => entry.path === target)
@@ -32,8 +33,17 @@ export function applyTrash(items: StorageItem[], target: string): StorageItem[] 
       return [{ ...item, children, bytes: Math.max(0, item.bytes - child.bytes) }]
     }
     if (!item.shadow && item.path && target.startsWith(`${item.path}/`)) {
-      return [{ ...item, bytes: Math.max(0, item.bytes - bytes) }]
+      const children = item.children.map((entry) =>
+        target.startsWith(`${entry.path}/`) ? { ...entry, bytes: Math.max(0, entry.bytes - bytes) } : entry
+      )
+      return [{ ...item, children, bytes: Math.max(0, item.bytes - bytes) }]
     }
     return [item]
   })
+}
+
+// Moving to the Trash frees nothing yet: the bytes now sit in the Trash until it is emptied.
+export function addToTrash(items: StorageItem[], bytes: number): StorageItem[] {
+  if (bytes <= 0) return items
+  return items.map((item) => (item.id === 'trash' ? { ...item, bytes: item.bytes + bytes } : item))
 }

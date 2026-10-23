@@ -2,7 +2,8 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { applyTrash, clearTrash } from '../shared/items'
+import { addToTrash, applyTrash, clearTrash, freedBytes } from '../shared/items'
+import type { TrashedPath } from './scanner'
 import type { SavedScan, StorageChild, StorageItem, Verdict } from '../shared/types'
 
 const VERDICTS = new Set<Verdict>(['mandatory', 'keep', 'optional', 'clear'])
@@ -105,10 +106,14 @@ export function clearMeasuredTrash(): void {
   writeScan({ ...current, items: clearTrash(current.items) })
 }
 
-export function persistTrash(paths: string[]): void {
+export function persistTrash(moved: TrashedPath[]): void {
   const current = readScan()
-  if (!current || paths.length === 0) return
-  const items = paths.reduce((list, filePath) => applyTrash(list, filePath), current.items)
+  if (!current || moved.length === 0) return
+  let items = current.items
+  for (const entry of moved) {
+    const bytes = freedBytes(items, entry.path) || entry.bytes
+    items = addToTrash(applyTrash(items, entry.path, entry.bytes), bytes)
+  }
   writeScan({ ...current, items })
 }
 

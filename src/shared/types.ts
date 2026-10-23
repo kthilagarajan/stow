@@ -48,6 +48,8 @@ export interface ScanEvent {
 export interface TrashResult {
   ok: boolean
   error?: string
+  // Size Stow had measured for what moved, when it knew one.
+  bytes?: number
 }
 
 export interface TrashTarget {
@@ -61,6 +63,8 @@ export interface TrashTarget {
 export interface TrashBatchResult {
   trashed: string[]
   error?: string
+  // Measured sizes of the paths that actually moved. Paths inside one of them are left out.
+  sizes?: Record<string, number>
 }
 
 export interface SavedScan {
@@ -94,9 +98,41 @@ export interface FolderListing {
 
 export type FolderResult = { ok: true; listing: FolderListing } | { ok: false; error: string }
 
+export type AssistantTarget = 'copy' | 'chatgpt' | 'claude' | 'cursor' | 'codex'
+
+export interface AssistantResult {
+  ok: boolean
+  notice?: string
+  error?: string
+}
+
 export interface AppMeta {
   version: string
 }
+
+export interface ItemInfo {
+  modified: number
+  created: number | null
+  opened: number | null
+  items: number | null
+  hidden: boolean
+  link: boolean
+}
+
+export type ThemeChoice = 'system' | 'light' | 'dark'
+
+export interface UpdateInfo {
+  version: string
+  // Release notes as written on GitHub, shown as plain text.
+  notes: string
+  pageUrl: string
+  // The disk image for this Mac's architecture, when the release has one.
+  asset: { name: string; url: string; bytes: number } | null
+}
+
+export type UpdateProgress = { received: number; total: number }
+
+export type UpdateDownload = { ok: true; file: string } | { ok: false; error: string }
 
 export interface StowApi {
   meta: () => Promise<AppMeta>
@@ -108,6 +144,18 @@ export interface StowApi {
   trash: (filePath: string) => Promise<TrashResult>
   trashMany: (paths: string[]) => Promise<TrashBatchResult>
   openFolder: (filePath: string) => Promise<FolderResult>
+  goTo: (filePath: string) => Promise<FolderResult>
+  pickFolder: () => Promise<string | null>
+  info: (filePath: string) => Promise<ItemInfo | null>
+  setTheme: (choice: ThemeChoice) => Promise<void>
+  checkUpdate: () => Promise<UpdateInfo | null>
+  downloadUpdate: () => Promise<UpdateDownload>
+  openDownloaded: (file: string) => Promise<void>
+  openReleasePage: () => Promise<void>
+  onUpdateProgress: (listener: (progress: UpdateProgress) => void) => () => void
+  // The app menu's Check for Updates… item.
+  onUpdateRequested: (listener: () => void) => () => void
   fileIcons: (paths: string[]) => Promise<Record<string, string>>
+  ask: (target: AssistantTarget, prompt: string) => Promise<AssistantResult>
   onEvent: (listener: (event: ScanEvent) => void) => () => void
 }

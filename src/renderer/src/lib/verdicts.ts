@@ -1,4 +1,5 @@
 import type { Verdict } from '@shared/types'
+import { Eraser, FileBox, FolderHeart, Layers, Scale, ShieldCheck, type LucideIcon } from 'lucide-react'
 
 export type ShelfId = 'everything' | 'large' | Verdict
 
@@ -48,6 +49,7 @@ export interface Shelf {
   label: string
   instruction: string
   color: string
+  icon: LucideIcon
 }
 
 export const shelves: Shelf[] = [
@@ -55,36 +57,42 @@ export const shelves: Shelf[] = [
     id: 'everything',
     label: 'Everything',
     instruction: 'Sorted by what you can do with them, largest first in each group.',
-    color: '#24497A'
+    color: 'var(--harbor)',
+    icon: Layers
   },
   {
     id: 'clear',
     label: verdicts.clear.label,
     instruction: verdicts.clear.instruction,
-    color: verdicts.clear.bin
+    color: 'var(--coral)',
+    icon: Eraser
   },
   {
     id: 'optional',
     label: verdicts.optional.label,
     instruction: verdicts.optional.instruction,
-    color: verdicts.optional.bin
+    color: 'var(--amber)',
+    icon: Scale
   },
   {
     id: 'keep',
     label: verdicts.keep.label,
     instruction: verdicts.keep.instruction,
-    color: verdicts.keep.bin
+    color: 'var(--kelp)',
+    icon: FolderHeart
   },
   {
     id: 'mandatory',
     label: verdicts.mandatory.label,
     instruction: verdicts.mandatory.instruction,
-    color: verdicts.mandatory.bin
+    color: 'var(--harbor)',
+    icon: ShieldCheck
   },
   {
     id: 'large',
     label: 'Large files',
     instruction: 'Files over 500 MB. They already sit inside the folders above, so this shelf does not add to the wall.',
-    color: '#152033'
+    color: 'var(--mist)',
+    icon: FileBox
   }
 ]

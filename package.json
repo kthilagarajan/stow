@@ -9,13 +9,13 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "tsx src/shared/segments.test.ts",
-    "dist": "electron-vite build && electron-builder --mac --publish never"
+    "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts",
+    "dist": "electron-vite build && electron-builder --mac --publish never",
+    "demo": "STOW_DEMO=1 electron-vite dev"
   },
   "dependencies": {
-    "@fontsource-variable/bricolage-grotesque": "*",
-    "@fontsource-variable/figtree": "*",
-    "@fontsource/jetbrains-mono": "*",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@radix-ui/react-progress": "*",
     "@radix-ui/react-scroll-area": "*",
     "@radix-ui/react-separator": "*",
@@ -63,9 +63,26 @@
       "icon": "build/icon.icns",
       "identity": null,
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ]
-    }
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kthilagarajan/storage-analyzer.git"
   }
 }

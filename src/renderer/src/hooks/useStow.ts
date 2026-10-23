@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useState } from 'react'
+import type { TrashTarget } from '@shared/types'
 import { initialState, reducer } from '../state'
 
 export function useStow() {
@@ -61,7 +62,7 @@ export function useStow() {
     try {
       const result = await api.trash(filePath)
       if (result.ok) {
-        dispatch({ type: 'trashed', path: filePath })
+        dispatch({ type: 'trashed', path: filePath, bytes: result.bytes ?? 0, inside: false })
         return true
       }
       dispatch({ type: 'action-error', message: result.error ?? 'macOS did not move it.' })
@@ -71,14 +72,20 @@ export function useStow() {
     }
   }
 
-  async function trashMany(paths: string[]): Promise<string[]> {
+  async function trashMany(targets: TrashTarget[]): Promise<string[]> {
     const api = window.stow
+    const paths = targets.map((target) => target.path)
     if (!api || paths.length === 0) return []
     setBusyPath(paths[0] ?? null)
     dispatch({ type: 'action-error', message: null })
     try {
       const result = await api.trashMany(paths)
-      for (const filePath of result.trashed) dispatch({ type: 'trashed', path: filePath })
+      const moved = new Set(result.trashed)
+      for (const filePath of result.trashed) {
+        const inside = [...moved].some((other) => filePath.startsWith(`${other}/`))
+        const bytes = result.sizes?.[filePath] ?? targets.find((target) => target.path === filePath)?.bytes ?? 0
+        dispatch({ type: 'trashed', path: filePath, bytes, inside })
+      }
       if (result.error) dispatch({ type: 'action-error', message: result.error })
       return result.trashed
     } finally {

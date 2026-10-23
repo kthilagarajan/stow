@@ -1,5 +1,5 @@
 import type { SavedScan, ScanEvent, StorageItem, VolumeInfo } from '@shared/types'
-import { applyTrash, clearTrash, freedBytes } from '@shared/items'
+import { addToTrash, applyTrash, clearTrash, freedBytes } from '@shared/items'
 
 export interface AppState {
   volume: VolumeInfo | null
@@ -14,6 +14,8 @@ export interface AppState {
   scannedAt: number | null
   version: string | null
   actionError: string | null
+  // False until the saved scan has been read, so the window can show placeholders instead of "nothing yet".
+  loaded: boolean
 }
 
 export const initialState: AppState = {
@@ -28,7 +30,8 @@ export const initialState: AppState = {
   limited: 0,
   scannedAt: null,
   version: null,
-  actionError: null
+  actionError: null,
+  loaded: false
 }
 
 export type Action =
@@ -38,7 +41,8 @@ export type Action =
   | { type: 'saved'; scan: SavedScan | null }
   | { type: 'emptied-trash' }
   | { type: 'event'; event: ScanEvent }
-  | { type: 'trashed'; path: string }
+  // `bytes` is the size known for the path; `inside` marks a path whose parent moved in the same batch.
+  | { type: 'trashed'; path: string; bytes: number; inside: boolean }
   | { type: 'action-error'; message: string | null }
 
 function applyEvent(state: AppState, event: ScanEvent): AppState {
@@ -108,12 +112,13 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, items: clearTrash(state.items), volume, actionError: null }
     }
     case 'saved':
-      if (state.scanning || state.scannedAt !== null) return state
+      if (state.scanning || state.scannedAt !== null) return { ...state, loaded: true }
       if (!action.scan) {
-        return { ...state, scanning: false, done: false, items: [], scannedAt: null, status: 'Scan when you are ready' }
+        return { ...state, loaded: true, scanning: false, done: false, items: [], scannedAt: null, status: 'Scan when you are ready' }
       }
       return {
         ...state,
+        loaded: true,
         items: action.scan.items,
         done: true,
         scanning: false,
@@ -124,15 +129,11 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'action-error':
       return { ...state, actionError: action.message }
     case 'trashed': {
-      const bytes = freedBytes(state.items, action.path)
-      const volume = state.volume
-        ? {
-            ...state.volume,
-            usedBytes: Math.max(0, state.volume.usedBytes - bytes),
-            freeBytes: state.volume.freeBytes + bytes
-          }
-        : null
-      return { ...state, items: applyTrash(state.items, action.path), volume, actionError: null }
+      // The disk does not get space back until the Trash is emptied, so only the Trash row grows.
+      // A path inside a folder that moved in the same batch was already counted with that folder.
+      if (action.inside) return state
+      const bytes = freedBytes(state.items, action.path) || action.bytes
+      return { ...state, items: addToTrash(applyTrash(state.items, action.path, action.bytes), bytes), actionError: null }
     }
     case 'event':
       return applyEvent(state, action.event)

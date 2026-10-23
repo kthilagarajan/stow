@@ -1,26 +1,27 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/bricolage-grotesque/wght.css';
-@import '@fontsource-variable/figtree/wght.css';
-@import '@fontsource/jetbrains-mono/400.css';
-@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-display: 'Bricolage Grotesque Variable', 'Avenir Next', sans-serif;
-  --font-sans: 'Figtree Variable', 'Avenir Next', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --color-fog: #e4edf6;
-  --color-sheet: #f8fbfe;
-  --color-ink: #152033;
-  --color-harbor: #24497a;
-  --color-kelp: #0e6b58;
-  --color-amber: #e8a317;
-  --color-amber-ink: #6d4a00;
-  --color-coral: #c83b32;
-  --color-mist: #5d6f86;
-  --color-line: #d3dfec;
-  --color-other: #8ea0b5;
+  --font-display: 'Geist Variable', -apple-system, sans-serif;
+  --font-sans: 'Geist Variable', -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --color-fog: var(--fog);
+  --color-sheet: var(--sheet);
+  --color-raised: var(--raised);
+  --color-chrome: var(--chrome);
+  --color-ink: var(--ink);
+  --color-harbor: var(--harbor);
+  --color-kelp: var(--kelp);
+  --color-amber: var(--amber);
+  --color-amber-ink: var(--amber-ink);
+  --color-coral: var(--coral);
+  --color-mist: var(--mist);
+  --color-line: var(--line);
+  --color-other: var(--other);
+  --color-well: var(--well);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,6 +48,29 @@
 
 :root {
   color-scheme: light;
+  --fog: #e4edf6;
+  --sheet: #f8fbfe;
+  /* Surfaces that lift off a sheet: selected rows, the active shelf. */
+  --raised: #ffffff;
+  /* Dark floating UI that stays dark in both themes: tooltips, the selection bar. */
+  --chrome: #152033;
+  --ink: #152033;
+  --harbor: #24497a;
+  --kelp: #0e6b58;
+  --amber: #e8a317;
+  --amber-ink: #6d4a00;
+  --coral: #c83b32;
+  --mist: #5d6f86;
+  --line: #d3dfec;
+  --other: #8ea0b5;
+  /* The tray the storage bar sits in. */
+  --well: #d5e2ef;
+  --free-a: #e7f0f8;
+  --free-b: #d5e3f0;
+  --skeleton-a: #dde7f1;
+  --skeleton-b: #eef4fa;
+  --selection: #d5e4f5;
+  --shadow: 21 32 51;
   --background: #e4edf6;
   --foreground: #152033;
   --card: #f8fbfe;
@@ -68,6 +92,58 @@
   --radius: 0.7rem;
 }
 
+.dark {
+  color-scheme: dark;
+  --fog: #0e1520;
+  --sheet: #151f2d;
+  --raised: #1e2a3b;
+  --chrome: #2a3850;
+  --ink: #e3eaf3;
+  --harbor: #8fb6ea;
+  --kelp: #4fc0a0;
+  --amber: #eab03a;
+  --amber-ink: #f3c86a;
+  --coral: #ec6a5f;
+  --mist: #8c9db3;
+  --line: #2a374a;
+  --other: #6b7d94;
+  --well: #1b2636;
+  --free-a: #1a2433;
+  --free-b: #223044;
+  --skeleton-a: #1d2838;
+  --skeleton-b: #283548;
+  --selection: #2b4568;
+  --shadow: 0 0 0;
+  --background: #0e1520;
+  --foreground: #e3eaf3;
+  --card: #151f2d;
+  --card-foreground: #e3eaf3;
+  --popover: #151f2d;
+  --popover-foreground: #e3eaf3;
+  --primary: #3b6db0;
+  --primary-foreground: #f8fbfe;
+  --secondary: #1e2a3b;
+  --secondary-foreground: #e3eaf3;
+  --muted: #1e2a3b;
+  --muted-foreground: #8c9db3;
+  --accent: #173a33;
+  --accent-foreground: #4fc0a0;
+  --destructive: #d9493f;
+  --border: #2a374a;
+  --input: #2a374a;
+  --ring: #8fb6ea;
+}
+
+/* Theme switches cross-fade instead of snapping. */
+html.theme-switching,
+html.theme-switching * {
+  transition:
+    background-color 260ms ease,
+    border-color 260ms ease,
+    color 260ms ease,
+    fill 260ms ease !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -83,12 +159,22 @@ body {
   overflow: hidden;
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Figtree Variable', 'Avenir Next', sans-serif;
+  font-family: 'Geist Variable', -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
+button:not(:disabled),
+[role='button'],
+a[href],
+summary,
+select,
+label[for],
+input[type='checkbox'] {
+  cursor: pointer;
+}
+
 ::selection {
-  background: #d5e4f5;
+  background: var(--selection);
 }
 
 .drag {
@@ -105,8 +191,8 @@ body {
 }
 
 .bin-free {
-  background-color: #e7f0f8;
-  background-image: repeating-linear-gradient(-45deg, #e7f0f8, #e7f0f8 6px, #d5e3f0 6px, #d5e3f0 12px);
+  background-color: var(--free-a);
+  background-image: repeating-linear-gradient(-45deg, var(--free-a), var(--free-a) 6px, var(--free-b) 6px, var(--free-b) 12px);
 }
 
 .item-deferred {
@@ -114,19 +200,28 @@ body {
   contain-intrinsic-size: auto none auto 76px;
 }
 
+.item-deferred-compact {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 40px;
+}
+
 .trash-dialog {
   width: min(440px, calc(100vw - 32px));
   margin: auto;
   padding: 0;
-  color: #152033;
-  background: #f8fbfe;
+  color: var(--ink);
+  background: var(--sheet);
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 24px 80px rgb(21 32 51 / 0.24);
+  box-shadow: 0 24px 80px rgb(var(--shadow) / 0.32);
 }
 
 .trash-dialog::backdrop {
   background: rgb(21 32 51 / 0.42);
+}
+
+.dark .trash-dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
 }
 
 [data-radix-scroll-area-viewport] > div {
@@ -134,8 +229,112 @@ body {
   min-width: 0 !important;
 }
 
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-a) 0%,
+    var(--skeleton-a) 35%,
+    var(--skeleton-b) 50%,
+    var(--skeleton-a) 65%,
+    var(--skeleton-a) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* Rows rise in one after another; --i is the row's place, capped so long lists do not drag. */
+.rise {
+  animation: rise 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 24ms);
+}
+
+.fade-in {
+  animation: fade 260ms ease-out both;
+}
+
+.trash-dialog[open] {
+  animation: pop 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.trash-dialog[open]::backdrop {
+  animation: fade 220ms ease-out;
+}
+
+[role='tabpanel'][data-state='active'] {
+  animation: fade 200ms ease-out;
+}
+
+@keyframes update-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--kelp) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--kelp) 22%, transparent);
+  }
+}
+
+/* A slow, gentle pulse so a waiting update is noticed without nagging. */
+.update-pill {
+  animation:
+    fade 300ms ease-out,
+    update-glow 2.4s ease-in-out 600ms 3;
+}
+
+@keyframes selection-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+.selection-bar {
+  animation: selection-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bin-segment {
     transition: none;
+  }
+
+  .selection-bar,
+  .update-pill,
+  .rise,
+  .fade-in,
+  .skeleton,
+  .trash-dialog[open],
+  .trash-dialog[open]::backdrop,
+  [role='tabpanel'][data-state='active'] {
+    animation: none;
   }
 }

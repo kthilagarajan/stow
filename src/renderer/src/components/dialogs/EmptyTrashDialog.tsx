@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { formatBytes } from '@/lib/format'
+import { BIN } from '@/lib/bin'
 
 export function EmptyTrashDialog({
   open,
@@ -38,17 +39,20 @@ export function EmptyTrashDialog({
       {open && (
         <form method="dialog" className="p-6">
           <h2 id="empty-trash-title" className="font-display text-[1.35rem] leading-tight tracking-tight">
-            Empty the Trash?
+            Empty the {BIN}?
           </h2>
           <p className="text-mist mt-3 text-sm leading-relaxed">
-            This permanently deletes {formatBytes(bytes)} in the Trash. There is no way back. Finder may ask once more before it finishes.
+            {bytes > 0
+              ? `This permanently deletes ${formatBytes(bytes)} in the ${BIN}.`
+              : `This permanently deletes everything in the ${BIN}.`}{' '}
+            There is no way back. Finder may ask once more before it finishes.
           </p>
           <div className="mt-6 flex justify-end gap-2">
             <button value="cancel" className={buttonVariants({ variant: 'outline' })}>
               Cancel
             </button>
             <button value="confirm" className={buttonVariants({ variant: 'destructive' })}>
-              Empty Trash
+              Empty {BIN}
             </button>
           </div>
         </form>

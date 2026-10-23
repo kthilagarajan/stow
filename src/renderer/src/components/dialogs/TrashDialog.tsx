@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { TrashTarget } from '@shared/types'
 import { buttonVariants } from '@/components/ui/button'
 import { formatBytes } from '@/lib/format'
+import { BIN } from '@/lib/bin'
 
 export function TrashDialog({
   targets,
@@ -44,13 +45,13 @@ export function TrashDialog({
       {targets && targets.length > 0 && (
         <form method="dialog" className="p-6">
           <h2 id="trash-title" className="font-display text-[1.35rem] leading-tight tracking-tight">
-            {many ? `Move ${targets.length} items to the Trash?` : `Move “${targets[0]?.title}” to the Trash?`}
+            {many ? `Move ${targets.length} items to the ${BIN}?` : `Move “${targets[0]?.title}” to the ${BIN}?`}
           </h2>
           {many ? (
             <p className="text-mist mt-3 text-sm leading-relaxed">
               {cautious
-                ? 'Some of these are not caches. If one of them is the only copy, the Trash is the way back.'
-                : 'They stay in the Trash until you empty it or put them back. Apps rebuild caches.'}
+                ? `Some of these are not caches. If one of them is the only copy, the ${BIN} is the way back.`
+                : `They stay in the ${BIN} until you empty it or put them back. Apps rebuild caches.`}
             </p>
           ) : null}
           {many ? (
@@ -68,8 +69,8 @@ export function TrashDialog({
             <>
               <p className="text-mist mt-3 text-sm leading-relaxed">
                 {targets[0]?.verdict === 'clear'
-                  ? `${targets[0].summary} It stays in the Trash until you empty it or put it back.`
-                  : `${targets[0]?.summary} This is not a cache. If this is the only copy, the Trash is the way back.`}
+                  ? `${targets[0].summary} It stays in the ${BIN} until you empty it or put it back.`
+                  : `${targets[0]?.summary} This is not a cache. If this is the only copy, the ${BIN} is the way back.`}
               </p>
               <p className="mt-3 font-mono text-[11px] leading-relaxed break-all">{targets[0]?.path}</p>
             </>
@@ -79,7 +80,7 @@ export function TrashDialog({
               Cancel
             </button>
             <button value="confirm" className={buttonVariants({ variant: 'destructive' })}>
-              Move to Trash
+              Move to {BIN}
             </button>
           </div>
         </form>

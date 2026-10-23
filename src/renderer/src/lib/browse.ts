@@ -1,10 +1,21 @@
-import type { FolderListing } from '@shared/types'
+import type { FolderEntry, FolderListing, StorageItem, Verdict } from '@shared/types'
 
 const FILE_EXT = /\.(dmg|pkg|iso|zip|tar|gz|tgz|7z|rar|pdf|mp4|mov|mkv|avi|png|jpe?g|gif|heic|webp|ipa|apk|txt|csv|json|mp3|wav|aiff)$/i
 
 export function canLookInside(filePath: string): boolean {
   if (!filePath) return false
   return !FILE_EXT.test(filePath)
+}
+
+// The name exactly as it sits on disk, dots and case included.
+export function diskName(filePath: string, fallback: string): string {
+  return filePath.split('/').filter(Boolean).at(-1) ?? fallback
+}
+
+// The catalog's friendlier label, when it differs from the name on disk.
+export function tagFor(item: StorageItem): string | undefined {
+  const name = diskName(item.path, item.title)
+  return name === item.title ? undefined : item.title
 }
 
 export interface BrowseFrame extends FolderListing {
@@ -30,4 +41,19 @@ export function applyBrowseTrash(stack: BrowseFrame[], target: string): BrowseFr
       entries: frame.entries.filter((item) => item.path !== target && !item.path.startsWith(`${target}/`))
     }
   })
+}
+
+// Everything the details pane needs about a folder or file picked while browsing.
+export interface FocusDetail {
+  title: string
+  path: string
+  bytes: number
+  verdict: Verdict
+  summary: string
+  detail?: string
+  trashable: boolean
+  canReveal: boolean
+  canOpen: boolean
+  kind?: FolderEntry['kind']
+  entries?: { name: string; bytes: number; verdict: Verdict; summary: string }[]
 }

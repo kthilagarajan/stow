@@ -1,29 +1,22 @@
 import type { FolderEntry, StorageItem, TrashTarget, Verdict } from '@shared/types'
-import { ChevronRight } from 'lucide-react'
+import { AskButton } from '@/components/dialogs/AskDialog'
+import { ChevronRight, FolderOpen, FolderSearch, Trash2 } from 'lucide-react'
+import { ActionTile } from '@/components/common/ActionTile'
+import { IconAction } from '@/components/common/ListRow'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { FileIcon } from '@/components/FileIcon'
+import { FileIcon } from '@/components/common/FileIcon'
+import { Metadata } from '@/components/inspector/Metadata'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useFileIcons } from '@/hooks/useFileIcons'
-import { canLookInside } from '@/lib/browse'
+import { canLookInside, diskName, tagFor, type FocusDetail } from '@/lib/browse'
 import { formatBytes } from '@/lib/format'
+import type { PromptSubject } from '@/lib/prompt'
 import { verdicts } from '@/lib/verdicts'
-
-export interface FocusDetail {
-  title: string
-  path: string
-  bytes: number
-  verdict: Verdict
-  summary: string
-  detail?: string
-  trashable: boolean
-  canReveal: boolean
-  canOpen: boolean
-  kind?: FolderEntry['kind']
-}
+import { BIN } from '@/lib/bin'
 
 export function Inspector({
   item,
@@ -57,6 +50,7 @@ export function Inspector({
         canReveal={focus.canReveal}
         canOpen={focus.canOpen}
         kind={focus.kind}
+        entries={focus.entries}
         busyPath={busyPath}
         actionError={actionError}
         onReveal={onReveal}
@@ -90,7 +84,10 @@ export function Inspector({
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <FileIcon src={icons[item.path]} kind={canLookInside(item.path) ? 'folder' : 'file'} />
-            <h2 className="font-display min-w-0 pt-1 text-lg leading-tight tracking-tight">{item.title}</h2>
+            <div className="min-w-0 pt-1">
+              <h2 className="font-display text-lg leading-tight tracking-tight break-all">{diskName(item.path, item.title)}</h2>
+              {tagFor(item) && <p className="text-mist mt-0.5 text-xs">{item.title}</p>}
+            </div>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -103,6 +100,7 @@ export function Inspector({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-mist break-all font-mono text-[11px] leading-relaxed">{pathLabel}</p>
+        {canReveal && <Metadata path={item.path} />}
         <Separator />
         {item.children.length > 0 ? (
           <Tabs defaultValue="inside">
@@ -119,14 +117,7 @@ export function Inspector({
                   const openable = canLookInside(child.path)
                   return (
                   <li key={child.path} className="rounded-xl bg-fog/80 px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (openable) onOpen(child.path, child.name, child.summary)
-                      }}
-                      aria-label={openable ? `Look inside ${child.name}` : child.name}
-                      className="flex w-full items-center gap-2 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor"
-                    >
+                    <div className="flex items-center gap-2">
                       <FileIcon src={icons[child.path]} kind={child.kind ?? (openable ? 'folder' : 'file')} className="size-7" />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-3">
@@ -134,30 +125,34 @@ export function Inspector({
                           <span className="shrink-0 font-mono text-xs">{formatBytes(child.bytes)}</span>
                         </span>
                       </span>
-                      {openable && <ChevronRight className="text-harbor size-4 shrink-0" aria-hidden />}
-                    </button>
-                    <p className="text-mist mt-1 text-xs leading-relaxed">{child.summary}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => onReveal(child.path)}>
-                        Reveal in Finder
-                      </Button>
-                      {child.trashable && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={busyPath === child.path}
-                          onClick={() =>
-                            onTrash({
-                              path: child.path,
-                              title: child.name,
-                              verdict: child.verdict,
-                              summary: child.summary
-                            })
-                          }
-                        >
-                          {busyPath === child.path ? 'Moving…' : 'Move to Trash'}
-                        </Button>
+                      {openable && (
+                        <span className="-mr-1.5">
+                          <IconAction label={`Look inside ${child.name}`} icon={ChevronRight} onClick={() => onOpen(child.path, child.name, child.summary)} />
+                        </span>
                       )}
+                      </div>
+                    <div className="mt-1 flex items-start gap-2">
+                      <p className="text-mist min-w-0 flex-1 pt-1 text-xs leading-relaxed">{child.summary}</p>
+                      <div className="-mr-1.5 -mb-1 flex shrink-0">
+                        <IconAction label="Reveal in Finder" icon={FolderSearch} onClick={() => onReveal(child.path)} />
+                        {child.trashable && (
+                          <IconAction
+                            danger
+                            label={busyPath === child.path ? 'Moving…' : `Move to ${BIN}`}
+                            icon={Trash2}
+                            disabled={busyPath === child.path}
+                            onClick={() =>
+                              onTrash({
+                                path: child.path,
+                                title: child.name,
+                                verdict: child.verdict,
+                                summary: child.summary,
+                                bytes: child.bytes
+                              })
+                            }
+                          />
+                        )}
+                      </div>
                     </div>
                   </li>
                   )
@@ -169,34 +164,31 @@ export function Inspector({
           <p className="text-sm leading-relaxed">{item.detail}</p>
         )}
         {spread && <p className="text-mist text-xs leading-relaxed">The space is spread across smaller files.</p>}
-        <div className="flex flex-wrap gap-2">
-          {canLookInside(item.path) && (
-            <Button variant="outline" onClick={() => onOpen(item.path, item.title, item.summary)}>
-              Look inside
-            </Button>
-          )}
-          {canReveal && (
-            <Button variant="outline" onClick={() => onReveal(item.path)}>
-              Reveal in Finder
-            </Button>
-          )}
-          {item.trashable && (
-            <Button
-              variant="destructive"
-              disabled={busyPath === item.path}
-              onClick={() =>
-                onTrash({
-                  path: item.path,
-                  title: item.title,
-                  verdict: item.verdict,
-                  summary: item.summary
-                })
-              }
-            >
-              {busyPath === item.path ? 'Moving…' : 'Move to Trash'}
-            </Button>
-          )}
-        </div>
+        <Actions
+          subject={{
+            title: diskName(item.path, item.title),
+            path: item.id === 'node-modules' ? 'Inside your project folders' : item.path,
+            bytes: item.bytes,
+            verdict: item.verdict,
+            summary: item.summary,
+            detail: item.detail,
+            entries: item.children.map((child) => ({
+              name: child.name,
+              bytes: child.bytes,
+              verdict: child.verdict,
+              summary: child.summary
+            }))
+          }}
+          canOpen={canLookInside(item.path)}
+          canReveal={canReveal}
+          trashable={item.trashable}
+          busy={busyPath === item.path}
+          onOpen={() => onOpen(item.path, diskName(item.path, item.title), item.summary)}
+          onReveal={() => onReveal(item.path)}
+          onTrash={() =>
+            onTrash({ path: item.path, title: diskName(item.path, item.title), verdict: item.verdict, summary: item.summary, bytes: item.bytes })
+          }
+        />
         {actionError && <p className="text-coral text-sm leading-relaxed">{actionError}</p>}
       </CardContent>
     </Card>
@@ -214,6 +206,7 @@ function DetailCard({
   canReveal,
   canOpen,
   kind,
+  entries,
   busyPath,
   actionError,
   onReveal,
@@ -234,7 +227,7 @@ function DetailCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <FileIcon src={icons[path]} kind={kind ?? (canOpen ? 'folder' : 'file')} />
-            <h2 className="font-display min-w-0 pt-1 text-lg leading-tight tracking-tight">{title}</h2>
+            <h2 className="font-display min-w-0 pt-1 text-lg leading-tight tracking-tight break-all">{title}</h2>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -247,31 +240,58 @@ function DetailCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-mist break-all font-mono text-[11px] leading-relaxed">{path}</p>
+        <Metadata path={path} />
         <Separator />
         <p className="text-sm leading-relaxed">{detail || summary}</p>
-        <div className="flex flex-wrap gap-2">
-          {canOpen && (
-            <Button variant="outline" onClick={() => onOpen(path, title, summary)}>
-              Look inside
-            </Button>
-          )}
-          {canReveal && (
-            <Button variant="outline" onClick={() => onReveal(path)}>
-              Reveal in Finder
-            </Button>
-          )}
-          {trashable && (
-            <Button
-              variant="destructive"
-              disabled={busyPath === path}
-              onClick={() => onTrash({ path, title, verdict, summary })}
-            >
-              {busyPath === path ? 'Moving…' : 'Move to Trash'}
-            </Button>
-          )}
-        </div>
+        <Actions
+          subject={{ title, path, bytes, verdict, summary, detail, entries }}
+          canOpen={canOpen}
+          canReveal={canReveal}
+          trashable={trashable}
+          busy={busyPath === path}
+          onOpen={() => onOpen(path, title, summary)}
+          onReveal={() => onReveal(path)}
+          onTrash={() => onTrash({ path, title, verdict, summary, bytes })}
+        />
         {actionError && <p className="text-coral text-sm leading-relaxed">{actionError}</p>}
       </CardContent>
     </Card>
+  )
+}
+
+function Actions({
+  subject,
+  canOpen,
+  canReveal,
+  trashable,
+  busy,
+  onOpen,
+  onReveal,
+  onTrash
+}: {
+  subject: PromptSubject
+  canOpen: boolean
+  canReveal: boolean
+  trashable: boolean
+  busy: boolean
+  onOpen: () => void
+  onReveal: () => void
+  onTrash: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid auto-cols-fr grid-flow-col gap-2">
+        {canOpen && <ActionTile icon={FolderOpen} label="Look inside" hint="Browse what this folder holds" onClick={onOpen} />}
+        {canReveal && <ActionTile icon={FolderSearch} label="Reveal" hint="Reveal in Finder" onClick={onReveal} />}
+        <AskButton subject={subject} />
+      </div>
+      {trashable && (
+        <Button variant="destructive" className="h-10 w-full" disabled={busy} onClick={onTrash}>
+          <Trash2 aria-hidden />
+          {busy ? 'Moving…' : `Move to ${BIN}`}
+          {!busy && subject.bytes > 0 && <span className="font-mono text-xs font-normal opacity-80">{formatBytes(subject.bytes)}</span>}
+        </Button>
+      )}
+    </div>
   )
 }

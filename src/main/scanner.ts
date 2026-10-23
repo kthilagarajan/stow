@@ -8,6 +8,7 @@ import { classifyEntry, classifyLargeFile } from './classify'
 import { discoverRoots, type RootSpec } from './catalog'
 import { describeChild } from './describe'
 import { runCommand } from './exec'
+import { applyTrash } from '../shared/items'
 import { lookupRecord, pathKeys, stricterVerdict, trashDecision, type TrashRecord } from './guard'
 import type {
   EntryKind,
@@ -17,6 +18,7 @@ import type {
   ScanEvent,
   StorageChild,
   StorageItem,
+  TrashBatchResult,
   TrashResult,
   Verdict
 } from '../shared/types'
@@ -114,7 +116,23 @@ export class Scanner {
   private registry = new Map<string, TrashRecord>()
   private listings = new Map<string, CachedListing>()
   private sizes = new Map<string, number>()
+  private emitted: StorageItem[] = []
+  private removed = new Set<string>()
   private home = os.homedir()
+  private publish: ((items: StorageItem[], limited: number) => void) | null = null
+  private rememberTrash: ((paths: string[]) => void) | null = null
+
+  setPublisher(publish: (items: StorageItem[], limited: number) => void): void {
+    this.publish = publish
+  }
+
+  setTrashRecorder(remember: (paths: string[]) => void): void {
+    this.rememberTrash = remember
+  }
+
+  hydrate(items: StorageItem[]): void {
+    for (const item of items) this.register(item)
+  }
 
   stop(): void {
     this.generation += 1
@@ -128,6 +146,8 @@ export class Scanner {
     this.registry.clear()
     this.listings.clear()
     this.sizes.clear()
+    this.emitted = []
+    this.removed.clear()
     this.home = os.homedir()
     const current = () => generation === this.generation
 
@@ -158,6 +178,7 @@ export class Scanner {
         if (!current() || !item) return
         if (item.limited || !item.complete) limited += 1
         this.register(item)
+        this.note(item)
         this.emit(sender, generation, { type: 'item', item })
       } catch {
         limited += 1
@@ -180,6 +201,7 @@ export class Scanner {
     const dependencies = await this.findDependencies(generation)
     if (dependencies) {
       this.register(dependencies)
+      this.note(dependencies)
       this.emit(sender, generation, { type: 'item', item: dependencies })
     }
     completed += 1
@@ -194,9 +216,17 @@ export class Scanner {
     const large = await this.findLargeFiles(generation)
     for (const item of large) {
       this.register(item)
+      this.note(item)
       this.emit(sender, generation, { type: 'item', item })
     }
     completed += 1
+    let snapshot = this.emitted
+    for (const filePath of this.removed) snapshot = applyTrash(snapshot, filePath)
+    try {
+      this.publish?.(snapshot, limited)
+    } catch {
+      // The scan is still shown. The next successful scan writes the database.
+    }
     this.emit(sender, generation, { type: 'done', limited, completed, total, message: 'Scan finished' })
     return { started: true }
   }
@@ -207,7 +237,7 @@ export class Scanner {
     shell.showItemInFolder(real)
   }
 
-  async trash(filePath: string): Promise<TrashResult> {
+  async trash(filePath: string, options?: { persist?: boolean }): Promise<TrashResult> {
     const real = await this.real(filePath)
     if (!real) return { ok: false, error: 'That path is no longer there.' }
     const record = lookupRecord(this.registry, filePath) ?? lookupRecord(this.registry, real)
@@ -219,6 +249,61 @@ export class Scanner {
       return { ok: false, error: 'macOS did not move it. It may be in use, or protected.' }
     }
     this.forget(real)
+    this.removed.add(filePath)
+    this.removed.add(real)
+    if (options?.persist !== false) {
+      try {
+        this.rememberTrash?.([filePath])
+      } catch {
+        return { ok: true }
+      }
+    }
+    return { ok: true }
+  }
+
+  async trashMany(paths: string[]): Promise<TrashBatchResult> {
+    const unique = [
+      ...new Set(paths.filter((filePath) => typeof filePath === 'string' && filePath.length > 0 && filePath.length <= 4096))
+    ].slice(0, 200)
+    unique.sort((a, b) => a.length - b.length)
+    const trashed: string[] = []
+    const covered: string[] = []
+    let error: string | undefined
+    for (const filePath of unique) {
+      if (covered.some((parent) => filePath === parent || filePath.startsWith(`${parent}/`))) {
+        trashed.push(filePath)
+        continue
+      }
+      const result = await this.trash(filePath, { persist: false })
+      if (result.ok) {
+        trashed.push(filePath)
+        covered.push(filePath)
+      } else if (!error) error = result.error
+    }
+    if (trashed.length > 0) {
+      try {
+        this.rememberTrash?.(trashed)
+      } catch {
+        // The files are already in the Trash. The list updates in the window.
+      }
+    }
+    return { trashed, error }
+  }
+
+  async emptyTrash(): Promise<TrashResult> {
+    if (process.platform !== 'darwin') return { ok: false, error: 'Stow empties the Trash on macOS.' }
+    const result = await runCommand(
+      'osascript',
+      ['-e', 'tell application "Finder" to empty trash'],
+      180_000,
+      this.track,
+      this.release,
+      () => true
+    )
+    if (result.code !== 0) {
+      return { ok: false, error: 'Finder did not empty the Trash. Nothing was permanently deleted.' }
+    }
+    this.forget(path.join(this.home, '.Trash'))
     return { ok: true }
   }
 
@@ -292,6 +377,10 @@ export class Scanner {
     } catch {
       return null
     }
+  }
+
+  private note(item: StorageItem): void {
+    this.emitted = [...this.emitted.filter((entry) => entry.id !== item.id), item]
   }
 
   private register(item: StorageItem): void {

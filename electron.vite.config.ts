@@ -5,7 +5,12 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        external: ['node:sqlite']
+      }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()]

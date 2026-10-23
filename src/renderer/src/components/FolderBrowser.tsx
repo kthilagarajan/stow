@@ -18,7 +18,8 @@ export function FolderBrowser({
   onCrumb,
   onOpen,
   onPick,
-  onTrash
+  onTrash,
+  onTrashMany
 }: {
   stack: BrowseFrame[]
   shelfLabel: string
@@ -29,10 +30,12 @@ export function FolderBrowser({
   onOpen: (entry: FolderEntry) => void
   onPick: (entry: FolderEntry) => void
   onTrash: (target: TrashTarget) => void
+  onTrashMany: (targets: TrashTarget[]) => void
 }) {
   const frame = stack[stack.length - 1]
   const [query, setQuery] = useState('')
   const icons = useFileIcons(frame ? [frame.path, ...frame.entries.map((entry) => entry.path)] : [])
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set())
   const q = query.trim().toLowerCase()
   const entries = useMemo(() => {
     if (!frame) return []
@@ -41,6 +44,18 @@ export function FolderBrowser({
   }, [frame, q])
 
   if (!frame) return null
+
+  const trashable = entries.filter((entry) => entry.trashable)
+  const picked = trashable.filter((entry) => checked.has(entry.path))
+
+  function toggle(filePath: string): void {
+    setChecked((current) => {
+      const next = new Set(current)
+      if (next.has(filePath)) next.delete(filePath)
+      else next.add(filePath)
+      return next
+    })
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -98,6 +113,36 @@ export function FolderBrowser({
             className="border-line bg-fog/70 focus-visible:outline-harbor h-9 w-full rounded-lg border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           />
         </search>
+        {trashable.length > 0 && (
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setChecked(new Set(picked.length === trashable.length ? [] : trashable.map((entry) => entry.path)))}
+              className="text-harbor text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor"
+            >
+              {picked.length === trashable.length ? 'Clear selection' : 'Select all that can go'}
+            </button>
+            {picked.length > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  onTrashMany(
+                    picked.map((entry) => ({
+                      path: entry.path,
+                      title: entry.name,
+                      verdict: entry.verdict,
+                      summary: entry.summary,
+                      bytes: entry.bytes
+                    }))
+                  )
+                }
+                className="bg-coral rounded-lg px-3 py-1.5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor"
+              >
+                Move {picked.length === 1 ? '1 item' : `${picked.length} items`} to Trash
+              </button>
+            )}
+          </div>
+        )}
         {opening && (
           <p role="status" className="text-mist mt-2 text-xs">
             Measuring the next folder
@@ -123,13 +168,25 @@ export function FolderBrowser({
                   key={entry.path}
                   className={cn('flex items-stretch gap-1 rounded-xl border border-transparent bg-white/45', index >= 8 && 'item-deferred')}
                 >
+                  <span className="grid w-8 shrink-0 place-items-center">
+                    {entry.trashable ? (
+                      <input
+                        type="checkbox"
+                        checked={checked.has(entry.path)}
+                        onChange={() => toggle(entry.path)}
+                        aria-label={`Select ${entry.name}`}
+                        className="size-4"
+                        style={{ accentColor: '#24497A' }}
+                      />
+                    ) : null}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
                       if (openable) onOpen(entry)
                       else onPick(entry)
                     }}
-                    className="flex min-w-0 flex-1 gap-3 px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor"
+                    className="flex min-w-0 flex-1 gap-3 py-2.5 pr-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor"
                   >
                     <span className="mt-0.5 w-1 shrink-0 self-stretch rounded-full" style={{ background: color }} aria-hidden />
                     <FileIcon src={icons[entry.path]} kind={entry.kind} />
@@ -152,7 +209,8 @@ export function FolderBrowser({
                             path: entry.path,
                             title: entry.name,
                             verdict: entry.verdict,
-                            summary: entry.summary
+                            summary: entry.summary,
+                            bytes: entry.bytes
                           })
                         }
                       >

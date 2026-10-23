@@ -15,13 +15,21 @@ export function ShelfNav({
   onSelect,
   totals,
   items,
-  used
+  used,
+  version,
+  trashBytes,
+  emptying,
+  onEmptyTrash
 }: {
   active: ShelfId
   onSelect: (shelf: ShelfId) => void
   totals: SegmentTotals
   items: StorageItem[]
   used: number
+  version: string | null
+  trashBytes: number
+  emptying: boolean
+  onEmptyTrash: () => void
 }) {
   return (
     <nav aria-label="What to show" className="flex h-full min-h-0 flex-col rounded-2xl px-2 py-3">
@@ -47,9 +55,23 @@ export function ShelfNav({
           )
         })}
       </ul>
-      <p className="text-mist mt-auto px-2.5 pt-4 text-[11px] leading-relaxed">
-        Move to Trash leaves a way back. Scanning stays on this Mac.
-      </p>
+      <div className="mt-auto px-1 pt-4">
+        <button
+          type="button"
+          onClick={onEmptyTrash}
+          disabled={emptying || trashBytes <= 0}
+          className="border-coral/30 text-coral hover:bg-coral/10 focus-visible:outline-harbor w-full rounded-xl border px-2.5 py-2 text-left disabled:pointer-events-none disabled:opacity-40"
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold tracking-tight">{emptying ? 'Emptying…' : 'Empty Trash'}</span>
+            <span className="font-mono text-[11px]">{formatBytes(trashBytes)}</span>
+          </span>
+        </button>
+        <p className="text-mist px-1.5 pt-3 text-[11px] leading-relaxed">
+          Move to Trash leaves a way back. Empty Trash does not. Scanning stays on this Mac.
+          {version ? ` Version ${version}.` : ''}
+        </p>
+      </div>
     </nav>
   )
 }

@@ -282,7 +282,7 @@ function staticRoots(home: string): RootSpec[] {
       verdict: 'clear',
       group: 'Trash',
       summary: 'Already deleted, and still taking space until you empty the Trash.',
-      detail: 'Empty the Trash in Finder when you are sure. That step is permanent, so Stow will not do it. Reveal the folder and empty it yourself.',
+      detail: 'Empty Trash on the left permanently deletes everything in the Trash. There is no way back. Stow asks before it does that.',
       expand: true,
       trashable: false,
       timeoutMs: 45_000

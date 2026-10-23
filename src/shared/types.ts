@@ -55,6 +55,18 @@ export interface TrashTarget {
   title: string
   verdict: Verdict
   summary: string
+  bytes?: number
+}
+
+export interface TrashBatchResult {
+  trashed: string[]
+  error?: string
+}
+
+export interface SavedScan {
+  scannedAt: number
+  limited: number
+  items: StorageItem[]
 }
 
 export interface FolderEntry {
@@ -82,11 +94,19 @@ export interface FolderListing {
 
 export type FolderResult = { ok: true; listing: FolderListing } | { ok: false; error: string }
 
+export interface AppMeta {
+  version: string
+}
+
 export interface StowApi {
+  meta: () => Promise<AppMeta>
   getVolume: () => Promise<VolumeInfo>
+  loadScan: () => Promise<SavedScan | null>
+  emptyTrash: () => Promise<TrashResult>
   scan: () => Promise<{ started: boolean }>
   reveal: (filePath: string) => Promise<void>
   trash: (filePath: string) => Promise<TrashResult>
+  trashMany: (paths: string[]) => Promise<TrashBatchResult>
   openFolder: (filePath: string) => Promise<FolderResult>
   fileIcons: (paths: string[]) => Promise<Record<string, string>>
   onEvent: (listener: (event: ScanEvent) => void) => () => void

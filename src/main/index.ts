@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileIcons } from './icons'
 import { Scanner } from './scanner'
+import { clearMeasuredTrash, closeStore, openStore, persistTrash, readScan, writeScan } from './store'
 import { readVolume } from './volume'
 
 const scanner = new Scanner()
@@ -106,7 +107,25 @@ if (!app.requestSingleInstanceLock()) {
     })
     installIcon()
     installMenu()
+    openStore()
+    const saved = readScan()
+    if (saved) scanner.hydrate(saved.items)
+    scanner.setPublisher((items, limited) => writeScan({ scannedAt: Date.now(), limited, items }))
+    scanner.setTrashRecorder(persistTrash)
+    ipcMain.handle('app:meta', () => ({ version: app.getVersion() }))
     ipcMain.handle('volume:get', () => readVolume())
+    ipcMain.handle('trash:empty', async () => {
+      const result = await scanner.emptyTrash()
+      if (result.ok) {
+        try {
+          clearMeasuredTrash()
+        } catch {
+          // Finder already emptied the Trash. The window still updates.
+        }
+      }
+      return result
+    })
+    ipcMain.handle('scan:load', () => readScan())
     ipcMain.handle('scan:start', (event) => scanner.start(event.sender))
     ipcMain.handle('item:reveal', (_event, filePath: unknown) => {
       if (typeof filePath !== 'string') return
@@ -117,6 +136,10 @@ if (!app.requestSingleInstanceLock()) {
         return { ok: false, error: 'That path is not one Stow measured.' }
       }
       return scanner.trash(filePath)
+    })
+    ipcMain.handle('item:trash-many', (_event, paths: unknown) => {
+      if (!Array.isArray(paths)) return { trashed: [], error: 'Nothing was selected.' }
+      return scanner.trashMany(paths.filter((entry): entry is string => typeof entry === 'string'))
     })
     ipcMain.handle('folder:open', (_event, filePath: unknown) => {
       if (typeof filePath !== 'string') return { ok: false, error: 'That path is not one Stow measured.' }
@@ -134,6 +157,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     scanner.stop()
+    closeStore()
     app.quit()
   })
 }

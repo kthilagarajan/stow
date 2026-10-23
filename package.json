@@ -9,7 +9,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "tsx src/shared/segments.test.ts"
+    "test": "tsx src/shared/segments.test.ts",
+    "dist": "electron-vite build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "*",
@@ -35,10 +36,36 @@
     "@types/react-dom": "*",
     "@vitejs/plugin-react": "*",
     "electron": "*",
+    "electron-builder": "^26.15.3",
     "electron-vite": "*",
     "tailwindcss": "*",
     "tsx": "*",
     "typescript": "*",
     "vite": "*"
+  },
+  "build": {
+    "appId": "com.kthilagarajan.stow",
+    "productName": "Stow",
+    "copyright": "Scanning stays on this Mac.",
+    "npmRebuild": false,
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "build/icon.png",
+      "build/icon.icns",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   }
 }

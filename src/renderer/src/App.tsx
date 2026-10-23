@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { EmptyTrashDialog } from '@/components/EmptyTrashDialog'
 import { FolderBrowser } from '@/components/FolderBrowser'
 import { Inspector, type FocusDetail } from '@/components/Inspector'
 import { ItemList } from '@/components/ItemList'
@@ -15,20 +16,21 @@ import { StorageWall } from '@/components/StorageWall'
 import { TrashDialog } from '@/components/TrashDialog'
 import { useStow } from '@/hooks/useStow'
 import { applyBrowseTrash, canLookInside, type BrowseFrame } from '@/lib/browse'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatScannedAt } from '@/lib/format'
 import { diskLede } from '@/lib/lede'
 import { shelves, type ShelfId } from '@/lib/verdicts'
 
 export function App() {
-  const { available, state, busyPath, reveal, trash, rescan } = useStow()
+  const { available, state, busyPath, emptying, reveal, trashMany, emptyTrash, rescan } = useStow()
   const [shelf, setShelf] = useState<ShelfId>('everything')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [trashTarget, setTrashTarget] = useState<TrashTarget | null>(null)
+  const [trashTargets, setTrashTargets] = useState<TrashTarget[] | null>(null)
   const [stack, setStack] = useState<BrowseFrame[]>([])
   const [picked, setPicked] = useState<FolderEntry | null>(null)
   const [opening, setOpening] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
+  const [confirmEmpty, setConfirmEmpty] = useState(false)
   const filterId = useId()
   const activeShelf = shelves.find((entry) => entry.id === shelf) ?? shelves[0]
 
@@ -53,6 +55,7 @@ export function App() {
   )
   const selected = state.items.find((item) => item.id === selectedId) ?? null
   const percent = state.total > 0 ? Math.min(100, (state.completed / state.total) * 100) : 0
+  const trashItem = state.items.find((item) => item.id === 'trash')
   const current = stack.at(-1) ?? null
   const focus: FocusDetail | null = picked
     ? {
@@ -123,10 +126,11 @@ export function App() {
       <div className="flex h-full min-h-0 flex-col">
         <header className="drag relative flex items-center justify-between gap-4 px-5 pt-4 pb-3 pl-24">
           <div className="flex items-center gap-3">
-            <img src={mark} alt="" width={36} height={36} draggable={false} className="size-9 rounded-[10px]" />
+            <img src={mark} alt="" width={36} height={36} draggable={false} className="size-9" />
             <div>
               <p className="font-display text-[22px] leading-none tracking-tight">Stow</p>
               <p className="text-mist mt-1 text-xs">What can go, and what stays</p>
+              <p className="text-mist mt-1 text-xs">{state.scannedAt ? formatScannedAt(state.scannedAt) : 'No scan yet'}</p>
             </div>
           </div>
           <div className="no-drag flex items-center gap-4">
@@ -170,7 +174,17 @@ export function App() {
         </section>
 
         <div className="grid min-h-0 flex-1 grid-cols-[228px_minmax(0,1fr)_332px] gap-3 px-3 pb-3">
-          <ShelfNav active={shelf} onSelect={setShelf} totals={totals} items={state.items} used={state.volume?.usedBytes ?? 0} />
+          <ShelfNav
+            active={shelf}
+            onSelect={setShelf}
+            totals={totals}
+            items={state.items}
+            used={state.volume?.usedBytes ?? 0}
+            version={state.version}
+            trashBytes={trashItem?.bytes ?? 0}
+            emptying={emptying}
+            onEmptyTrash={() => setConfirmEmpty(true)}
+          />
           <main className="bg-sheet flex min-h-0 min-w-0 flex-col rounded-2xl">
             {current ? (
               <FolderBrowser
@@ -187,7 +201,8 @@ export function App() {
                 }}
                 onOpen={openEntry}
                 onPick={setPicked}
-                onTrash={setTrashTarget}
+                onTrash={(target) => setTrashTargets([target])}
+                onTrashMany={setTrashTargets}
               />
             ) : (
               <>
@@ -220,8 +235,10 @@ export function App() {
                         query={query}
                         selectedId={selectedId}
                         scanning={state.scanning}
+                        scanned={state.done}
                         onSelect={setSelectedId}
                         onOpen={(filePath, label, summary) => void openPath(filePath, label, summary)}
+                        onTrashMany={setTrashTargets}
                       />
                     </div>
                   </ScrollArea>
@@ -237,25 +254,39 @@ export function App() {
                 busyPath={busyPath}
                 actionError={state.actionError}
                 onReveal={(filePath) => void reveal(filePath)}
-                onTrash={setTrashTarget}
+                onTrash={(target) => setTrashTargets([target])}
                 onOpen={(filePath, label, summary) => void openPath(filePath, label, summary)}
               />
             </ScrollArea>
           </aside>
         </div>
       </div>
-      <TrashDialog
-        target={trashTarget}
-        onCancel={() => setTrashTarget(null)}
+      <EmptyTrashDialog
+        open={confirmEmpty}
+        bytes={trashItem?.bytes ?? 0}
+        onCancel={() => setConfirmEmpty(false)}
         onConfirm={() => {
-          const target = trashTarget
-          setTrashTarget(null)
-          if (!target) return
-          void trash(target.path).then((ok) => {
-            if (!ok) return
-            setStack((existing) => applyBrowseTrash(existing, target.path))
+          const trashPath = trashItem?.path
+          setConfirmEmpty(false)
+          void emptyTrash().then((ok) => {
+            if (!ok || !trashPath) return
+            setStack((existing) => applyBrowseTrash(existing, trashPath))
+            setPicked(null)
+          })
+        }}
+      />
+      <TrashDialog
+        targets={trashTargets}
+        onCancel={() => setTrashTargets(null)}
+        onConfirm={() => {
+          const targets = trashTargets
+          setTrashTargets(null)
+          if (!targets || targets.length === 0) return
+          void trashMany(targets.map((target) => target.path)).then((trashed) => {
+            if (trashed.length === 0) return
+            setStack((existing) => trashed.reduce((list, filePath) => applyBrowseTrash(list, filePath), existing))
             setPicked((entry) =>
-              entry && (entry.path === target.path || entry.path.startsWith(`${target.path}/`)) ? null : entry
+              entry && trashed.some((filePath) => entry.path === filePath || entry.path.startsWith(`${filePath}/`)) ? null : entry
             )
           })
         }}

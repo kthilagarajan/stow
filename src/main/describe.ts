@@ -41,7 +41,7 @@ export function describeChild(specId: string, name: string): string {
     return 'Log files. Safe to clear unless you are diagnosing a problem right now.'
   }
   if (specId === 'downloads') return downloadCopy(name)
-  if (specId === 'trash') return 'Already in the Trash. Empty the Trash in Finder when you are sure. That step is permanent.'
+  if (specId === 'trash') return 'Already in the Trash. Empty Trash on the left when you are sure. That step is permanent.'
   if (specId === 'applications' || specId === 'user-apps') {
     return 'An installed app. Stow will not uninstall it. Move it to the Trash from Finder if you no longer use it.'
   }

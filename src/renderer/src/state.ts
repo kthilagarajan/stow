@@ -1,4 +1,5 @@
-import type { ScanEvent, StorageItem, VolumeInfo } from '@shared/types'
+import type { SavedScan, ScanEvent, StorageItem, VolumeInfo } from '@shared/types'
+import { applyTrash, clearTrash, freedBytes } from '@shared/items'
 
 export interface AppState {
   volume: VolumeInfo | null
@@ -10,6 +11,8 @@ export interface AppState {
   completed: number
   total: number
   limited: number
+  scannedAt: number | null
+  version: string | null
   actionError: string | null
 }
 
@@ -19,42 +22,21 @@ export const initialState: AppState = {
   items: [],
   scanning: false,
   done: false,
-  status: 'Reading the disk',
+  status: 'Opening the last scan',
   completed: 0,
   total: 0,
   limited: 0,
+  scannedAt: null,
+  version: null,
   actionError: null
-}
-
-function freedBytes(items: StorageItem[], target: string): number {
-  for (const item of items) {
-    if (item.path === target) return item.bytes
-    const child = item.children.find((entry) => entry.path === target)
-    if (child) return child.bytes
-  }
-  return 0
-}
-
-export function applyTrash(items: StorageItem[], target: string): StorageItem[] {
-  const bytes = freedBytes(items, target)
-  return items.flatMap((item) => {
-    if (item.path === target) return []
-    const child = item.children.find((entry) => entry.path === target)
-    if (child) {
-      const children = item.children.filter((entry) => entry.path !== target)
-      if (item.id === 'node-modules' && children.length === 0) return []
-      return [{ ...item, children, bytes: Math.max(0, item.bytes - child.bytes) }]
-    }
-    if (!item.shadow && item.path && target.startsWith(`${item.path}/`)) {
-      return [{ ...item, bytes: Math.max(0, item.bytes - bytes) }]
-    }
-    return [item]
-  })
 }
 
 export type Action =
   | { type: 'volume'; volume: VolumeInfo }
   | { type: 'volume-error'; message: string }
+  | { type: 'meta'; version: string }
+  | { type: 'saved'; scan: SavedScan | null }
+  | { type: 'emptied-trash' }
   | { type: 'event'; event: ScanEvent }
   | { type: 'trashed'; path: string }
   | { type: 'action-error'; message: string | null }
@@ -91,6 +73,7 @@ function applyEvent(state: AppState, event: ScanEvent): AppState {
         done: true,
         limited: event.limited ?? 0,
         completed: event.completed ?? state.total,
+        scannedAt: Date.now(),
         status: 'Scan finished'
       }
     case 'error':
@@ -111,6 +94,33 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, volume: action.volume, volumeError: null }
     case 'volume-error':
       return { ...state, volumeError: action.message }
+    case 'meta':
+      return { ...state, version: action.version }
+    case 'emptied-trash': {
+      const bytes = state.items.find((item) => item.id === 'trash')?.bytes ?? 0
+      const volume = state.volume
+        ? {
+            ...state.volume,
+            usedBytes: Math.max(0, state.volume.usedBytes - bytes),
+            freeBytes: state.volume.freeBytes + bytes
+          }
+        : null
+      return { ...state, items: clearTrash(state.items), volume, actionError: null }
+    }
+    case 'saved':
+      if (state.scanning || state.scannedAt !== null) return state
+      if (!action.scan) {
+        return { ...state, scanning: false, done: false, items: [], scannedAt: null, status: 'Scan when you are ready' }
+      }
+      return {
+        ...state,
+        items: action.scan.items,
+        done: true,
+        scanning: false,
+        limited: action.scan.limited,
+        scannedAt: action.scan.scannedAt,
+        status: 'Showing the last scan'
+      }
     case 'action-error':
       return { ...state, actionError: action.message }
     case 'trashed': {

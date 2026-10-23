@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.astro/
+# Copied from the repository by scripts/sync.mjs
+public/icon.png
+public/screenshots/

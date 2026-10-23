@@ -83,6 +83,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kthilagarajan/storage-analyzer.git"
-  }
+    "url": "https://github.com/kthilagarajan/stow.git"
+  },
+  "license": "MIT",
+  "homepage": "https://kthilagarajan.github.io/stow/"
 }

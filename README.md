@@ -2,6 +2,8 @@
 
 See what your Mac is holding, and what it can let go.
 
+**[Website](https://kthilagarajan.github.io/stow/)** · **[Download](https://github.com/kthilagarajan/stow/releases/latest)** · MIT licensed
+
 Stow is a macOS storage analyzer. It measures the places that quietly fill a disk (caches, package stores, Xcode leftovers, simulators, old downloads) and sorts each one by what you can safely do with it. Everything happens on your Mac. Nothing is uploaded.
 
 ![Stow showing the storage bar, the shelves, and the details for the npm cache](docs/screenshots/overview-light.png)
@@ -55,9 +57,13 @@ macOS hides some folders, the Bin among them, unless an app has Full Disk Access
 
 ## Install
 
-Download the `.dmg` for your Mac from the [latest release](../../releases/latest): `arm64` for Apple silicon, `x64` for Intel. Then drag Stow to Applications.
+Download the `.dmg` for your Mac from the [latest release](https://github.com/kthilagarajan/stow/releases/latest): `arm64` for Apple silicon, `x64` for Intel. Then drag Stow to Applications.
 
-Builds are not signed with an Apple Developer ID yet. The first time you open Stow, right-click it in Applications and choose **Open**.
+Stow is not notarized by Apple yet, so clear the download flag once before the first launch:
+
+```bash
+xattr -cr /Applications/Stow.app
+```
 
 ### Updates
 
@@ -87,12 +93,23 @@ npm run dev
 
 ### Releases
 
-GitHub Actions (`.github/workflows/build.yml`) typechecks, tests and builds on every push to `main`. Pushing a tag such as `v0.2.0` also publishes a GitHub release with disk images for both chips, using the tag as the version. Installed copies of Stow find that release on their next update check.
+`.github/workflows/release.yml` typechecks, tests and builds on every push to `main` and every pull request, and keeps the disk images as a downloadable Actions artifact. Pushing a version tag also publishes a GitHub release with the `.dmg` and `.zip` for both chips. The tag must match `version` in `package.json`.
 
 ```bash
+npm version 0.2.0 --no-git-tag-version   # bump package.json, then commit it
 git tag v0.2.0
-git push origin v0.2.0
+git push origin main v0.2.0
 ```
+
+Installed copies of Stow find the release on their next update check.
+
+### Website
+
+The website in `site/` is an Astro page published to GitHub Pages by `.github/workflows/site.yml` whenever the site, the screenshots or the icon change on `main`. Preview it locally with `npm --prefix site install` and `npm --prefix site run dev`.
+
+### License
+
+[MIT](LICENSE)
 
 ### Built with
 

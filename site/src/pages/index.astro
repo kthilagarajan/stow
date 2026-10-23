@@ -1,0 +1,152 @@
+---
+import Shot from '../components/Shot.astro'
+import Base from '../layouts/Base.astro'
+
+const repo = 'https://github.com/kthilagarajan/stow'
+const description =
+  'Stow is a free, open-source macOS app that measures what fills your disk — caches, package stores, Xcode leftovers, simulators, old downloads — and sorts each folder by what you can safely do with it. Everything stays on your Mac.'
+
+const shelves = [
+  { name: 'Safe to delete', color: 'bg-coral', body: 'Caches, logs and build leftovers. Apps rebuild them, so Stow can move them to the Bin.' },
+  { name: 'Optional', color: 'bg-amber', body: 'Package stores, SDKs, simulators and installers. Useful, often replaceable. Look first, then clear.' },
+  { name: 'Not mandatory', color: 'bg-kelp', body: 'Your files and apps. The Mac runs without them, so Stow shows the size and leaves them alone.' },
+  { name: 'Mandatory', color: 'bg-navy', body: 'What your account needs: keychains, preferences, mail. Nothing here can be moved.' }
+]
+
+const features = [
+  { title: 'The Bin, never delete', body: 'Everything Stow removes goes to the Bin, so you can put it back from Finder. Emptying the Bin is the only permanent step, and Stow asks first.' },
+  { title: 'Real names, real sizes', body: 'Folders appear exactly as they are on disk, hidden ones and all, with when they were modified, created and last opened.' },
+  { title: 'Look inside anything', body: 'Double-click a folder to see what fills it, or press ⇧⌘G to go to any path, just like Finder.' },
+  { title: 'Pick several at once', body: '⌘-click the folders you are done with and move them to the Bin together. ⌘A selects everything that can go.' },
+  { title: 'Ask before you delete', body: 'Not sure about a folder? Stow writes the question for you and opens it in ChatGPT, Claude, Cursor or Codex.' },
+  { title: 'Feels at home on a Mac', body: 'Light and dark mode, a compact view for long lists, and updates offered straight from GitHub releases.' }
+]
+---
+
+<Base title="Stow" description={description}>
+  <main>
+    <section class="rise mx-auto max-w-6xl px-5 pt-20 pb-14 text-center">
+      <p class="mb-5 inline-block rounded-full border border-line bg-sheet px-3 py-1 text-xs text-mist">
+        Free and open source · macOS · Apple silicon and Intel
+      </p>
+      <h1 class="mx-auto max-w-4xl text-4xl font-semibold tracking-tight sm:text-6xl">
+        See what your Mac is holding, and what it can let go
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg text-mist">
+        Stow measures the places that quietly fill a disk and sorts every folder by what you can safely do with it.
+        Clear caches with confidence, and leave your own files where they are.
+      </p>
+      <div class="mt-9 flex flex-wrap justify-center gap-3">
+        <a class="rounded-xl bg-primary px-5 py-2.5 font-medium text-white shadow-lg shadow-primary/20 hover:opacity-90" href={`${repo}/releases/latest`}
+          >Download for Mac</a
+        >
+        <a class="rounded-xl border border-line bg-sheet px-5 py-2.5 font-medium hover:bg-raised" href={repo}>View on GitHub</a>
+      </div>
+    </section>
+
+    <section class="rise mx-auto max-w-6xl px-5" aria-label="Screenshot" style="animation-delay: 120ms">
+      <Shot
+        light="overview-light.png"
+        dark="overview-dark.png"
+        eager
+        alt="Stow showing a storage bar split into Safe to delete, Optional, Not mandatory and Mandatory, a list of folders such as Caches and .npm, and the details for the npm cache"
+      />
+    </section>
+
+    <section id="shelves" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-24" aria-labelledby="shelves-title">
+      <h2 id="shelves-title" class="text-3xl font-semibold tracking-tight">Every folder gets a verdict</h2>
+      <p class="mt-3 max-w-2xl text-mist">
+        Stow knows where macOS and your tools keep their caches. It puts each place on a shelf, so the question is never
+        “what is this?” but “do I still need it?”
+      </p>
+      <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          shelves.map((shelf) => (
+            <div class="rounded-2xl border border-line bg-sheet p-6">
+              <span class:list={['block h-1.5 w-10 rounded-full', shelf.color]} />
+              <h3 class="mt-4 font-medium">{shelf.name}</h3>
+              <p class="mt-2 text-sm leading-6 text-mist">{shelf.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mx-auto grid max-w-6xl items-center gap-12 px-5 pt-28 lg:grid-cols-[1fr_1.4fr]" aria-labelledby="inside">
+      <div>
+        <h2 id="inside" class="text-3xl font-semibold tracking-tight">Look inside before you let go</h2>
+        <p class="mt-4 text-mist">
+          Open any folder to see what fills it, largest first. Each row says whether it can go and why, and the details
+          pane shows when it was last touched.
+        </p>
+        <p class="mt-4 text-mist">
+          Folders outside the usual places start as “keep”. Stow only offers the Bin for things it recognises, like
+          caches, <code class="font-mono text-sm text-ink">node_modules</code> and old installers.
+        </p>
+      </div>
+      <Shot dark="folder-dark.png" alt="Inside the Caches folder: Google, Spotify, pnpm and CocoaPods caches with their sizes, and Google's details" />
+    </section>
+
+    <section class="mx-auto max-w-6xl px-5 pt-28" aria-labelledby="features">
+      <h2 id="features" class="text-3xl font-semibold tracking-tight">Careful by design</h2>
+      <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          features.map((feature) => (
+            <div class="rounded-2xl border border-line bg-sheet p-6">
+              <h3 class="font-medium">{feature.title}</h3>
+              <p class="mt-2 text-sm leading-6 text-mist">{feature.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mx-auto grid max-w-6xl items-center gap-12 px-5 pt-28 lg:grid-cols-[1.4fr_1fr]" aria-labelledby="privacy">
+      <Shot light="multi-select-light.png" alt="Three optional folders selected with ⌘-click and a bar offering to move all three to the Bin" />
+      <div>
+        <h2 id="privacy" class="text-3xl font-semibold tracking-tight">Nothing about your Mac leaves it</h2>
+        <p class="mt-4 text-mist">
+          Scanning, sizes and file details stay on your Mac. Stow has no account, no analytics and no server.
+        </p>
+        <p class="mt-4 text-mist">
+          Its only network request reads public release information from GitHub, so it can tell you when a new version is
+          out. Downloading it is up to you.
+        </p>
+      </div>
+    </section>
+
+    <section id="install" class="mx-auto max-w-3xl scroll-mt-20 px-5 pt-28 text-center" aria-labelledby="install-title">
+      <h2 id="install-title" class="text-3xl font-semibold tracking-tight">Install</h2>
+      <p class="mt-4 text-mist">
+        Download the <code class="font-mono text-sm text-ink">.dmg</code> for your Mac
+        (<code class="font-mono text-sm text-ink">arm64</code> for Apple silicon, <code class="font-mono text-sm text-ink">x64</code>
+        for Intel) and drag Stow to Applications. It isn't notarized by Apple yet, so clear the download flag once:
+      </p>
+      <div class="mx-auto mt-6 flex max-w-xl items-center gap-3 rounded-xl border border-line bg-sheet p-3 text-left">
+        <code id="unquarantine" class="flex-1 font-mono text-[13px] [overflow-wrap:anywhere]">xattr -cr /Applications/Stow.app</code>
+        <button type="button" data-copy="unquarantine" class="shrink-0 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90">
+          Copy
+        </button>
+      </div>
+      <p class="mt-6 text-sm text-mist">
+        For accurate sizes everywhere, give Stow Full Disk Access in System Settings → Privacy &amp; Security. It works
+        without it, too. After that, Stow offers new versions itself.
+      </p>
+      <a class="mt-8 inline-block rounded-xl bg-primary px-5 py-2.5 font-medium text-white hover:opacity-90" href={`${repo}/releases/latest`}
+        >Download the latest release</a
+      >
+    </section>
+  </main>
+</Base>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    button.addEventListener('click', async () => {
+      const text = document.getElementById(button.dataset.copy!)?.textContent ?? ''
+      await navigator.clipboard.writeText(text.trim())
+      const label = button.textContent
+      button.textContent = 'Copied'
+      setTimeout(() => (button.textContent = label), 1500)
+    })
+  }
+</script>

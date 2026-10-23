@@ -1,0 +1,73 @@
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import 'tailwindcss';
+
+/* Stow's own palette: the same tokens the app uses, light first, dark under the media query. */
+@theme {
+  --color-fog: var(--fog);
+  --color-sheet: var(--sheet);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-mist: var(--mist);
+  --color-line: var(--line);
+  --color-harbor: var(--harbor);
+  --color-primary: var(--primary);
+  --color-coral: #c83b32;
+  --color-amber: #e8a317;
+  --color-kelp: #0e6b58;
+  --color-navy: #24497a;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root {
+  color-scheme: light;
+  --fog: #e4edf6;
+  --sheet: #f8fbfe;
+  --raised: #ffffff;
+  --ink: #152033;
+  --mist: #5d6f86;
+  --line: #d3dfec;
+  --harbor: #24497a;
+  --primary: #24497a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --fog: #0e1520;
+    --sheet: #151f2d;
+    --raised: #1e2a3b;
+    --ink: #e3eaf3;
+    --mist: #8c9db3;
+    --line: #2a374a;
+    --harbor: #8fb6ea;
+    --primary: #3b6db0;
+  }
+}
+
+html {
+  background: var(--fog);
+  color: var(--ink);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--harbor) 25%, transparent);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.rise {
+  animation: rise 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}

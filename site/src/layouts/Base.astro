@@ -1,0 +1,84 @@
+---
+import '../styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+  /** Path of the page's social image, relative to the site. */
+  image?: string
+}
+
+const { title, description, image = 'screenshots/overview-light.png' } = Astro.props
+const base = import.meta.env.BASE_URL
+const canonical = new URL(Astro.url.pathname, Astro.site)
+const imageUrl = new URL(`${base}${image}`, Astro.site)
+const fullTitle = title === 'Stow' ? 'Stow: see what your Mac is holding, and what it can let go' : `${title} · Stow`
+const repo = 'https://github.com/kthilagarajan/stow'
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Stow',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'macOS',
+  description,
+  url: new URL(base, Astro.site).href,
+  image: imageUrl.href,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  license: 'https://opensource.org/licenses/MIT',
+  downloadUrl: `${repo}/releases/latest`
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/png" href={`${base}icon.png`} />
+    <link rel="apple-touch-icon" href={`${base}icon.png`} />
+    <link rel="sitemap" href={`${base}sitemap-index.xml`} />
+    <meta name="theme-color" content="#e4edf6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1520" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Stow" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={imageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+  <body class="min-h-screen font-sans antialiased">
+    <header class="sticky top-0 z-20 border-b border-line bg-fog/80 backdrop-blur">
+      <nav class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-5" aria-label="Main">
+        <a href={base} class="flex items-center gap-2.5 font-semibold tracking-tight">
+          <img src={`${base}icon.png`} alt="" width="26" height="26" />
+          Stow
+        </a>
+        <div class="ml-auto flex items-center gap-5 text-sm text-mist">
+          <a class="hidden hover:text-ink sm:inline" href={`${base}#shelves`}>How it sorts</a>
+          <a class="hidden hover:text-ink sm:inline" href={`${base}#install`}>Install</a>
+          <a class="hover:text-ink" href={repo}>GitHub</a>
+          <a class="rounded-lg bg-primary px-3 py-1.5 font-medium text-white hover:opacity-90" href={`${repo}/releases/latest`}
+            >Download</a
+          >
+        </div>
+      </nav>
+    </header>
+    <slot />
+    <footer class="mt-28 border-t border-line">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-8 text-sm text-mist">
+        <span>Stow is free and open source (MIT).</span>
+        <a class="hover:text-ink" href={repo}>Source</a>
+        <a class="hover:text-ink" href={`${repo}/releases`}>Releases</a>
+        <a class="hover:text-ink" href={`${repo}/issues`}>Report a problem</a>
+      </div>
+    </footer>
+  </body>
+</html>

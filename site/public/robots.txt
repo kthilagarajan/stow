@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kthilagarajan.github.io/stow/sitemap-index.xml

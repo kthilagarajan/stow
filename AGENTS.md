@@ -87,10 +87,15 @@ Path aliases: `@/` is `src/renderer/src`, and `@shared/` is `src/shared`.
 ## Releasing
 
 1. Make sure `npm run typecheck` and `npm test` pass on `main`.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`. CI sets the app version from the tag and publishes a GitHub release with `Stow-<version>-arm64.dmg` and `Stow-<version>-x64.dmg`.
-3. Keep those file names: the in-app updater picks the `.dmg` whose name contains the Mac's architecture.
+2. Bump `version` in `package.json` (`npm version 0.2.0 --no-git-tag-version`) and commit it.
+3. Tag and push: `git tag v0.2.0 && git push origin main v0.2.0`. `.github/workflows/release.yml` checks the tag matches `package.json`, builds, and publishes a GitHub release with `Stow-<version>-arm64.dmg`, `Stow-<version>-x64.dmg` and matching zips.
+4. Keep those file names: the in-app updater picks the `.dmg` whose name contains the Mac's architecture.
 
-To refresh the README screenshots, run `npm run demo` and capture the window. Screenshots live in `docs/screenshots/`.
+To refresh the screenshots, run `npm run demo` and capture the window. Screenshots live in `docs/screenshots/` and are used by both the README and the website.
+
+## Website
+
+`site/` is an Astro + Tailwind page using the app's palette and Geist, published to GitHub Pages at https://kthilagarajan.github.io/stow/ by `.github/workflows/site.yml`. `site/scripts/sync.mjs` copies the icon and screenshots in at build time, so never edit copies under `site/public/`. Keep the site's wording in line with the README and the app.
 
 ## UI conventions
 

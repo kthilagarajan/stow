@@ -1,6 +1,6 @@
 [package]
 name = "stow"
-version = "1.0.1"
+version = "1.0.2"
 description = "See what your Mac is holding, and what it can let go."
 authors = ["kthilagarajan"]
 edition = "2021"

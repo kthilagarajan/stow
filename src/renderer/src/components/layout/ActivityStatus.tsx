@@ -1,6 +1,5 @@
 import type { ActivityTask } from '@shared/types'
 import { BIN } from '@/lib/bin'
-import { cn } from '@/lib/utils'
 
 const SHOWN = 3
 
@@ -31,38 +30,36 @@ function describe(task: ActivityTask): { title: string; detail?: string } {
   }
 }
 
-// What is running behind the scenes, so a loader always has a reason beside it.
+// What is running behind the scenes, so a loader always has a reason beside it. Hidden when idle.
 export function ActivityStatus({ tasks }: { tasks: ActivityTask[] }) {
-  const busy = tasks.length > 0
+  if (tasks.length === 0) return null
   const shown = tasks.slice(0, SHOWN)
   return (
     <section aria-label="Background activity" aria-live="polite" className="bg-raised/50 ring-line mb-3 rounded-xl px-2.5 py-2 ring-1">
       <p className="text-mist flex items-center gap-2 text-[11px] font-semibold tracking-wide uppercase">
-        <span className={cn('size-1.5 rounded-full', busy ? 'activity-dot bg-harbor' : 'bg-kelp')} aria-hidden />
-        {busy ? 'Working' : 'Nothing running'}
+        <span className="activity-dot bg-harbor size-1.5 rounded-full" aria-hidden />
+        Working
       </p>
-      {busy && (
-        <ul className="mt-1.5 flex flex-col gap-2">
-          {shown.map((task) => {
-            const { title, detail } = describe(task)
-            const share = task.total ? Math.min(100, ((task.done ?? 0) / task.total) * 100) : null
-            return (
-              <li key={task.id} className="fade-in min-w-0">
-                <p className="truncate text-xs font-medium" title={title}>
-                  {title}
-                </p>
-                {detail && <p className="text-mist truncate font-mono text-[10px]">{detail}</p>}
-                {share !== null && (
-                  <span className="bg-line mt-1 block h-0.5 overflow-hidden rounded-full" aria-hidden>
-                    <span className="activity-bar bg-harbor block h-full rounded-full" style={{ width: `${share}%` }} />
-                  </span>
-                )}
-              </li>
-            )
-          })}
-          {tasks.length > SHOWN && <li className="text-mist text-[11px]">{tasks.length - SHOWN} more</li>}
-        </ul>
-      )}
+      <ul className="mt-1.5 flex flex-col gap-2">
+        {shown.map((task) => {
+          const { title, detail } = describe(task)
+          const share = task.total ? Math.min(100, ((task.done ?? 0) / task.total) * 100) : null
+          return (
+            <li key={task.id} className="fade-in min-w-0">
+              <p className="truncate text-xs font-medium" title={title}>
+                {title}
+              </p>
+              {detail && <p className="text-mist truncate font-mono text-[10px]">{detail}</p>}
+              {share !== null && (
+                <span className="bg-line mt-1 block h-0.5 overflow-hidden rounded-full" aria-hidden>
+                  <span className="activity-bar bg-harbor block h-full rounded-full" style={{ width: `${share}%` }} />
+                </span>
+              )}
+            </li>
+          )
+        })}
+        {tasks.length > SHOWN && <li className="text-mist text-[11px]">{tasks.length - SHOWN} more</li>}
+      </ul>
     </section>
   )
 }

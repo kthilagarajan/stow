@@ -1,6 +1,6 @@
 {
   "name": "stow",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "description": "See what your Mac is holding, and what it can let go.",

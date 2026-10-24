@@ -48,6 +48,9 @@ jobs:
         run: npm run dist
         env:
           CI: true
+      # An unsealed bundle makes macOS call the downloaded app damaged.
+      - name: Check the app signature
+        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Stow.app
       - uses: actions/upload-artifact@v4
         with:
           name: Stow-mac

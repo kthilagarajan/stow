@@ -51,10 +51,18 @@ jobs:
       # An unsealed bundle makes macOS call the downloaded app damaged.
       - name: Check the app signature
         run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Stow.app
+      # The in-app updater downloads this zip, unpacks it, and swaps it in for the running app.
+      - name: Zip the app for in-app updates
+        run: |
+          version=$(node -p "require('./package.json').version")
+          arch=$(uname -m | sed 's/^arm64$/aarch64/')
+          ditto -c -k --keepParent src-tauri/target/release/bundle/macos/Stow.app "src-tauri/target/release/bundle/dmg/Stow_${version}_${arch}.app.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: Stow-mac
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/dmg/*.app.zip
           if-no-files-found: error
 
   publish:
@@ -81,5 +89,5 @@ jobs:
             xattr -cr /Applications/Stow.app
             ```
 
-            Copies of Stow that are already installed offer this release from the Update button in the header.
+            Copies of Stow that are already installed offer this release from the Update button in the header, and install it with a restart.
         run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "Stow $GITHUB_REF_NAME" --notes "$NOTES" --generate-notes

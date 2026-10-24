@@ -4,8 +4,7 @@ use tauri::{AppHandle, State};
 use crate::assistant::open_assistant;
 use crate::demo::{self, is_demo};
 use crate::info::item_info;
-use crate::model::{AppMeta, AssistantResult, FolderResult, TrashBatchResult, TrashResult, app_version};
-use crate::updates::open_downloaded;
+use crate::model::{AppMeta, AssistantResult, FolderResult, TrashBatchResult, TrashResult, UpdateResult, app_version};
 use crate::volume::read_volume;
 use crate::window::apply_theme;
 use crate::activity::ActivityTask;
@@ -191,22 +190,31 @@ pub async fn check_update(state: State<'_, AppState>) -> Result<Option<crate::mo
 }
 
 #[tauri::command(rename = "downloadUpdate")]
-pub async fn download_update(app: AppHandle, state: State<'_, AppState>) -> Result<crate::model::UpdateDownload, String> {
+pub async fn download_update(app: AppHandle, state: State<'_, AppState>) -> Result<UpdateResult, String> {
     if is_demo() {
-        return Ok(crate::model::UpdateDownload::err("There is no update to download."));
+        return Ok(UpdateResult::from(Err("There is no update to download.".into())));
     }
     let (repo, latest) = {
         let updates = state.updates.lock().unwrap_or_else(|poison| poison.into_inner());
         (updates.repo(), updates.latest())
     };
     let _busy = state.activity.begin("download", latest.as_ref().map(|info| info.version.clone()));
-    Ok(crate::updates::Updates::download(repo, latest, &app).await)
+    let staged = crate::updates::Updates::download(repo, latest, &app).await;
+    Ok(UpdateResult::from(staged.map(|staged| state.updates.lock().unwrap_or_else(|poison| poison.into_inner()).set_staged(staged))))
 }
 
-#[tauri::command(rename = "openDownloaded")]
-pub async fn open_download(app: AppHandle, file: Option<serde_json::Value>) {
-    let Some(file) = string_arg(file.as_ref()).map(str::to_string) else { return };
-    let _ = off_main(move || open_downloaded(&app, &file)).await;
+// Takes no arguments: the only app it installs is the one `downloadUpdate` checked and staged.
+#[tauri::command(rename = "installUpdate")]
+pub async fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<UpdateResult, String> {
+    let staged = state.updates.lock().unwrap_or_else(|poison| poison.into_inner()).staged();
+    let Some(staged) = staged else {
+        return Ok(UpdateResult::from(Err("Download the update first.".into())));
+    };
+    let result = off_main(move || crate::updates::install(&staged)).await?;
+    if result.is_ok() {
+        app.exit(0);
+    }
+    Ok(UpdateResult::from(result))
 }
 
 #[tauri::command(rename = "openReleasePage")]

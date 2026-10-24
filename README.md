@@ -67,7 +67,7 @@ xattr -cr /Applications/Stow.app
 
 ### Updates
 
-Stow checks GitHub for a newer release a few seconds after it opens, and every six hours after that. You can also choose **Stow → Check for Updates…**. When one is out, an **Update** button appears in the header. It shows the release notes and downloads the disk image for your chip into Downloads, then opens it so you can drag the new Stow into Applications.
+Stow checks GitHub for a newer release a few seconds after it opens, and every six hours after that. You can also choose **Stow → Check for Updates…**. When one is out, an **Update** button appears in the header. It shows the release notes and downloads the update inside Stow; **Restart to update** then replaces the app and opens the new version. Stow has to be in a folder it can write to, such as Applications, for that to work.
 
 ### Privacy
 

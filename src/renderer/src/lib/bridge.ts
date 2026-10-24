@@ -15,9 +15,9 @@ import type {
   ThemeChoice,
   TrashBatchResult,
   TrashResult,
-  UpdateDownload,
   UpdateInfo,
   UpdateProgress,
+  UpdateResult,
   VolumeInfo
 } from '@shared/types'
 
@@ -64,8 +64,8 @@ const api: StowApi = {
   info: (filePath) => invoke<ItemInfo | null>('info', { path: filePath }),
   setTheme: (choice: ThemeChoice) => invoke<void>('setTheme', { choice }),
   checkUpdate: () => invoke<UpdateInfo | null>('checkUpdate'),
-  downloadUpdate: () => invoke<UpdateDownload>('downloadUpdate'),
-  openDownloaded: (file) => invoke<void>('openDownloaded', { file }),
+  downloadUpdate: () => invoke<UpdateResult>('downloadUpdate'),
+  installUpdate: () => invoke<UpdateResult>('installUpdate'),
   openReleasePage: () => invoke<void>('openReleasePage'),
   onUpdateProgress,
   onUpdateRequested: (listener) => onUpdateRequested(() => listener()),

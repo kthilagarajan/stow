@@ -22,7 +22,7 @@ Stow can move a user's files to the Bin. These rules are what make that safe. Do
 1. **Rust decides what can be trashed, never the window.** `src-tauri/src/guard.rs` (`trash_decision`) only allows paths that Stow measured, that are inside the home folder, and whose verdict is `clear` or `optional`. It always refuses the home folder itself, sensitive Library folders (keychains, mail, photos and others), apps and photo libraries. Every command in `src-tauri/src/commands.rs` validates its arguments, because the page is not trusted.
 2. **Move to the Bin, never delete.** Use the macOS trash (`trash` crate, NSWorkspace recycle). The only permanent step is Empty Bin, which goes through Finder and is confirmed in the UI first.
 3. **Unknown means keep.** A folder outside the catalog (for example one reached with Go to folder) starts as `keep` and not trashable. `classify_entry` in `src-tauri/src/classify.rs` only loosens that for things it recognises, such as caches, `node_modules` and installers. A path the scan already labelled keeps its label wherever it is reached from (`to_folder_entry` in `src-tauri/src/scanner.rs`).
-4. **Nothing about the Mac leaves it.** The only network code is `src-tauri/src/updates.rs`: it reads public release information from this repository on GitHub, and downloads a release asset when the person asks. It sends no paths, sizes or identifiers. It only downloads from `https://github.com/<repo>/releases/download/`, into Downloads. Do not add other network calls. Ask AI only builds a prompt and hands it to a desktop app or the clipboard (`src-tauri/src/assistant.rs`).
+4. **Nothing about the Mac leaves it.** The only network code is `src-tauri/src/updates.rs`: it reads public release information from this repository on GitHub, and downloads a release asset when the person asks. It sends no paths, sizes or identifiers. It only downloads from `https://github.com/<repo>/releases/download/`, into a temporary folder, and only installs an app whose bundle identifier and version match the release. Do not add other network calls. Ask AI only builds a prompt and hands it to a desktop app or the clipboard (`src-tauri/src/assistant.rs`).
 5. **Show names exactly as they are on disk**, including a leading dot and the original case. A friendlier catalog label may appear beside the name (`diskName` and `tagFor` in `src/renderer/src/lib/browse.ts`), never instead of it.
 6. **No real data in the repository.** Screenshots, tests and fixtures use demo mode (`src-tauri/src/demo.rs`) or invented paths such as `/Users/alex`. Never commit a real scan, a real home path, or credentials.
 
@@ -57,7 +57,7 @@ src-tauri/     Rust: scanning, trashing, persistence, and Tauri commands.
 | `guard.rs` | `trash_decision` and the path helpers it relies on. |
 | `store.rs` | Saves the last scan and folder listings to `stow.sqlite` in the app's user data folder (`rusqlite`). `Db` queues writes on one thread; reads go through `Db::read` from a blocking task. |
 | `info.rs` | Per-item metadata for the details pane: dates (with last opened from Spotlight) and item count. |
-| `updates.rs` | Checks GitHub releases for a newer version, downloads the disk image for this chip, and opens it. The repository comes from `package.json` (`repository.url`); `STOW_UPDATE_REPO` overrides it for testing. |
+| `updates.rs` | Checks GitHub releases for a newer version, downloads the zipped app for this chip (checked against GitHub's SHA-256), unpacks it, and on Restart to update swaps it in for the running app with a small shell script and reopens it. The repository comes from `package.json` (`repository.url`); `STOW_UPDATE_REPO` overrides it for testing. |
 | `demo.rs` | Demo mode (`STOW_DEMO=1`): made-up scan data built from the real catalog, used by `npm run demo` and for screenshots. It keeps its own profile and never touches files. |
 | `volume.rs`, `icons.rs`, `assistant.rs`, `exec.rs` | Disk totals, Finder icons, Ask AI hand-off, and child-process helpers. |
 
@@ -91,7 +91,7 @@ Path aliases: `@/` is `src/renderer/src`, and `@shared/` is `src/shared`.
 1. Make sure `npm run typecheck`, `npm test`, and `cargo test --manifest-path src-tauri/Cargo.toml` pass on `main`.
 2. Bump `version` in `package.json` (`npm version 0.2.0 --no-git-tag-version`) and commit it. `src-tauri/tauri.conf.json` reads that version.
 3. Tag and push: `git tag v0.2.0 && git push origin main v0.2.0`. `.github/workflows/release.yml` checks the tag matches `package.json`, builds, and publishes a GitHub release with the disk images.
-4. The in-app updater picks the `.dmg` whose name contains this Mac's architecture: `arm64` or `aarch64`, and `x64` or `x86_64`. `tauri build` writes them under `src-tauri/target/release/bundle/dmg/`.
+4. The in-app updater picks the `.app.zip` whose name contains this Mac's architecture: `arm64` or `aarch64`, and `x64` or `x86_64`. The release workflow zips `Stow.app` with `ditto` next to the `.dmg` files `tauri build` writes under `src-tauri/target/release/bundle/dmg/`. A release without a zip for this chip only offers View release.
 
 To refresh the screenshots, run `npm run demo` and capture the window. Screenshots live in `docs/screenshots/` and are used by both the README and the website.
 

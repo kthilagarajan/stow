@@ -168,7 +168,7 @@ export interface UpdateInfo {
   // Release notes as written on GitHub, shown as plain text.
   notes: string
   pageUrl: string
-  // The disk image for this Mac's architecture, when the release has one.
+  // The zipped app for this Mac's architecture, when the release has one.
   asset: { name: string; url: string; bytes: number } | null
 }
 
@@ -196,7 +196,7 @@ export interface ActivityTask {
   startedAt: number
 }
 
-export type UpdateDownload = { ok: true; file: string } | { ok: false; error: string }
+export type UpdateResult = { ok: true } | { ok: false; error: string }
 
 export interface StowApi {
   meta: () => Promise<AppMeta>
@@ -214,8 +214,9 @@ export interface StowApi {
   info: (filePath: string) => Promise<ItemInfo | null>
   setTheme: (choice: ThemeChoice) => Promise<void>
   checkUpdate: () => Promise<UpdateInfo | null>
-  downloadUpdate: () => Promise<UpdateDownload>
-  openDownloaded: (file: string) => Promise<void>
+  // Downloads, checks and unpacks the update; installUpdate then swaps it in and restarts Stow.
+  downloadUpdate: () => Promise<UpdateResult>
+  installUpdate: () => Promise<UpdateResult>
   openReleasePage: () => Promise<void>
   onUpdateProgress: (listener: (progress: UpdateProgress) => void) => () => void
   // The app menu's Check for Updates… item.

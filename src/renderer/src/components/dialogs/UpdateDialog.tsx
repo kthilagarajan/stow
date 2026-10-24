@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowDownToLine, ExternalLink, FolderOpen, RotateCw } from 'lucide-react'
+import { ArrowDownToLine, ExternalLink, RefreshCw, RotateCw } from 'lucide-react'
 import { Skeleton } from '@/components/common/Skeletons'
 import { buttonVariants } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -53,7 +53,7 @@ export function UpdateDialog({ update, current }: { update: Update; current: str
                 Stow {info.version} is available
               </h2>
               <p className="text-mist mt-2 text-sm leading-relaxed">
-                {current ? `You have ${current}. ` : ''}It downloads from GitHub into your Downloads folder.
+                {current ? `You have ${current}. ` : ''}It downloads from GitHub, then Stow restarts to finish. Your last scan stays.
               </p>
               {info.notes && (
                 <div className="border-line bg-fog/60 mt-4 max-h-44 overflow-auto rounded-xl border p-3 text-xs leading-relaxed whitespace-pre-wrap">
@@ -68,10 +68,12 @@ export function UpdateDialog({ update, current }: { update: Update; current: str
                   </p>
                 </div>
               )}
-              {phase === 'ready' && (
-                <p className="fade-in mt-4 text-sm leading-relaxed">
-                  The installer is open in Finder. Quit Stow, drag the new Stow into Applications to replace this one, then open it
-                  again.
+              {phase === 'ready' && !error && (
+                <p className="fade-in mt-4 text-sm leading-relaxed">The update is ready. Restart Stow to start using {info.version}.</p>
+              )}
+              {phase === 'installing' && (
+                <p className="fade-in mt-4 text-sm leading-relaxed" role="status">
+                  Restarting Stow…
                 </p>
               )}
               {error && <p className="text-coral mt-3 text-sm leading-relaxed">{error}</p>}
@@ -79,7 +81,7 @@ export function UpdateDialog({ update, current }: { update: Update; current: str
           )}
           <div className="mt-6 flex justify-end gap-2">
             <button value="cancel" className={buttonVariants({ variant: 'outline' })}>
-              {phase === 'downloading' ? 'Hide' : 'Close'}
+              {phase === 'downloading' ? 'Hide' : phase === 'ready' ? 'Later' : 'Close'}
             </button>
             {info && !info.asset && (
               <button type="button" className={buttonVariants()} onClick={() => void update.openRelease()}>
@@ -87,13 +89,13 @@ export function UpdateDialog({ update, current }: { update: Update; current: str
                 View release
               </button>
             )}
-            {info?.asset && phase === 'ready' && (
-              <button type="button" className={buttonVariants()} onClick={() => void update.openInstaller()}>
-                <FolderOpen aria-hidden />
-                Open installer
+            {info?.asset && (phase === 'ready' || phase === 'installing') && (
+              <button type="button" disabled={phase === 'installing'} className={buttonVariants()} onClick={() => void update.install()}>
+                <RefreshCw aria-hidden />
+                Restart to update
               </button>
             )}
-            {info?.asset && phase !== 'ready' && (
+            {info?.asset && phase !== 'ready' && phase !== 'installing' && (
               <button type="button" disabled={phase === 'downloading'} className={buttonVariants()} onClick={() => void update.download()}>
                 {phase === 'error' ? <RotateCw aria-hidden /> : <ArrowDownToLine aria-hidden />}
                 {phase === 'error' ? 'Try again' : phase === 'downloading' ? 'Downloading…' : `Download ${formatBytes(info.asset.bytes)}`}

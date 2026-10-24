@@ -84,12 +84,12 @@ export function App() {
           onScan={rescan}
           update={
             update.info
-              ? { version: update.info.version, downloading: update.phase === 'downloading', onOpen: update.request }
+              ? { version: update.info.version, downloading: update.phase === 'downloading', ready: update.phase === 'ready', onOpen: update.request }
               : null
           }
         />
 
-        <section className="px-5 pb-4" aria-label="Disk">
+        <section className="px-5 pt-4 pb-4" aria-label="Disk">
           {state.volumeError && <p className="text-coral mb-2 text-sm">{state.volumeError}</p>}
           <StorageWall
             totals={totals}

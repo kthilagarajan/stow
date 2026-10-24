@@ -104,7 +104,7 @@ pub fn run() {
             commands::set_theme,
             commands::check_update,
             commands::download_update,
-            commands::open_download,
+            commands::install_update,
             commands::open_release_page,
             commands::file_icons,
             commands::ask,

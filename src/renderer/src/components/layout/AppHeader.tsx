@@ -31,36 +31,41 @@ export function AppHeader({
   onGoTo: () => void
   onScan: () => void
   // Shown only when a newer release is out.
-  update: { version: string; downloading: boolean; onOpen: () => void } | null
+  update: { version: string; downloading: boolean; ready: boolean; onOpen: () => void } | null
 }) {
   const { theme, cycle } = useTheme()
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   const scanLabel = scanning ? 'Scanning' : scanned ? 'Scan again' : 'Scan'
 
   return (
-    // pl-24 leaves room for the macOS traffic lights; the row is 36px tall so it lines up with them.
+    // A title bar the width of the window: the macOS traffic lights sit in its left end (trafficLightPosition in
+    // tauri.conf.json centres them on this 52px row), so pl-[84px] starts the logo just after them.
     // Tauri only drags from the element that was pressed, so every non-interactive piece carries the attribute.
-    <header data-tauri-drag-region className="relative flex items-center justify-between gap-4 px-5 pt-3 pb-3 pl-24">
-      <div data-tauri-drag-region className="flex items-center gap-3">
-        <img data-tauri-drag-region src={mark} alt="" width={36} height={36} draggable={false} className="size-9" />
-        <div data-tauri-drag-region>
-          <p data-tauri-drag-region className="font-display text-[22px] leading-none tracking-tight">Stow</p>
-          <p data-tauri-drag-region className="text-mist mt-1 text-xs leading-none">What can go, and what stays</p>
+    <header
+      data-tauri-drag-region
+      className="bg-sheet/80 border-line/70 relative flex h-13 shrink-0 items-center justify-between gap-4 border-b pr-3 pl-[84px]"
+    >
+      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2.5">
+        <span data-tauri-drag-region aria-hidden className="bg-line/80 mr-1.5 h-5 w-px" />
+        <img data-tauri-drag-region src={mark} alt="" width={28} height={28} draggable={false} className="size-7" />
+        <div data-tauri-drag-region className="flex min-w-0 items-baseline gap-2">
+          <p data-tauri-drag-region className="font-display text-[17px] leading-none font-semibold tracking-tight">Stow</p>
+          <p data-tauri-drag-region className="text-mist truncate text-xs leading-none">What can go, and what stays</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         {update && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" className="update-pill text-kelp h-9" onClick={update.onOpen}>
+              <Button variant="outline" className="update-pill text-kelp h-8" onClick={update.onOpen}>
                 <ArrowDownToLine aria-hidden />
-                {update.downloading ? 'Downloading…' : 'Update'}
+                {update.downloading ? 'Downloading…' : update.ready ? 'Restart to update' : 'Update'}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Stow {update.version} is available</TooltipContent>
           </Tooltip>
         )}
-        <div className="border-line/70 bg-sheet/70 flex h-9 items-center gap-2 rounded-lg border px-3">
+        <div className="border-line/70 bg-sheet/70 flex h-8 items-center gap-2 rounded-lg border px-3">
           <HardDrive className="text-harbor size-4" aria-hidden />
           <span className="text-sm font-semibold tracking-tight">{volume?.name ?? 'Macintosh HD'}</span>
           {volume ? (
@@ -84,12 +89,12 @@ export function AppHeader({
         <IconButton label="Compact rows" hint={compact ? 'Roomy rows' : 'Compact rows'} pressed={compact} onClick={onToggleCompact}>
           {compact ? <Rows4 aria-hidden /> : <Rows3 aria-hidden />}
         </IconButton>
-        <Button onClick={onScan} disabled={scanning} aria-label={scanLabel}>
+        <Button className="ml-1 h-8" onClick={onScan} disabled={scanning} aria-label={scanLabel}>
           <RefreshCw className={scanning ? 'motion-safe:animate-spin' : undefined} aria-hidden />
           {scanLabel}
         </Button>
       </div>
-      {scanning && <Progress value={progress} aria-label="Scan progress" className="absolute inset-x-0 bottom-0 h-1 rounded-none" />}
+      {scanning && <Progress value={progress} aria-label="Scan progress" className="absolute inset-x-0 -bottom-px h-0.5 rounded-none" />}
     </header>
   )
 }
@@ -110,7 +115,7 @@ function IconButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="outline" size="icon" className="size-9" aria-label={label} aria-pressed={pressed} onClick={onClick}>
+        <Button variant="ghost" size="icon" className="text-mist hover:text-ink size-8" aria-label={label} aria-pressed={pressed} onClick={onClick}>
           {children}
         </Button>
       </TooltipTrigger>

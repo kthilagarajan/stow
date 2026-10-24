@@ -266,6 +266,8 @@ pub struct UpdateAsset {
     pub name: String,
     pub url: String,
     pub bytes: u64,
+    #[serde(skip)]
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -286,21 +288,18 @@ pub struct UpdateProgress {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateDownload {
+pub struct UpdateResult {
     pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-impl UpdateDownload {
-    pub fn ok(file: String) -> Self {
-        Self { ok: true, file: Some(file), error: None }
-    }
-
-    pub fn err(error: impl Into<String>) -> Self {
-        Self { ok: false, file: None, error: Some(error.into()) }
+impl UpdateResult {
+    pub fn from(result: Result<(), String>) -> Self {
+        match result {
+            Ok(()) => Self { ok: true, error: None },
+            Err(error) => Self { ok: false, error: Some(error) },
+        }
     }
 }
 

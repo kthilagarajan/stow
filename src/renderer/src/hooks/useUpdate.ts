@@ -3,14 +3,13 @@ import type { UpdateInfo, UpdateProgress } from '@shared/types'
 
 const RECHECK_MS = 6 * 60 * 60 * 1000
 
-export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error'
 
-// Watches GitHub releases for a newer Stow and downloads it on request.
+// Watches GitHub releases for a newer Stow, downloads it on request, and restarts into it.
 export function useUpdate() {
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [phase, setPhase] = useState<UpdatePhase>('idle')
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
-  const [file, setFile] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   // True when the person asked from the menu, so "you're up to date" is worth saying.
   const [requested, setRequested] = useState(false)
@@ -18,7 +17,7 @@ export function useUpdate() {
   async function check(): Promise<void> {
     const api = window.stow
     if (!api) return
-    setPhase((current) => (current === 'downloading' || current === 'ready' ? current : 'checking'))
+    setPhase((current) => (current === 'downloading' || current === 'ready' || current === 'installing' ? current : 'checking'))
     const found = await api.checkUpdate()
     setInfo(found)
     setPhase((current) => (current === 'checking' ? 'idle' : current))
@@ -54,16 +53,26 @@ export function useUpdate() {
       setError(result.error)
       return
     }
-    setFile(result.file)
     setPhase('ready')
-    await api.openDownloaded(result.file)
+  }
+
+  async function install(): Promise<void> {
+    const api = window.stow
+    if (!api) return
+    setPhase('installing')
+    setError(null)
+    // On success Stow quits here and the new version opens in its place.
+    const result = await api.installUpdate()
+    if (!result.ok) {
+      setPhase('ready')
+      setError(result.error)
+    }
   }
 
   return {
     info,
     phase,
     progress,
-    file,
     error,
     requested,
     request: () => {
@@ -72,7 +81,7 @@ export function useUpdate() {
     },
     dismiss: () => setRequested(false),
     download,
-    openInstaller: () => (file ? window.stow?.openDownloaded(file) : undefined),
+    install,
     openRelease: () => window.stow?.openReleasePage()
   }
 }

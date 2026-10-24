@@ -20,7 +20,7 @@ export const IPC = {
   ask: 'assistant:open',
   checkUpdate: 'update:check',
   downloadUpdate: 'update:download',
-  openDownloaded: 'update:open',
+  installUpdate: 'update:install',
   openReleasePage: 'update:page',
   updateProgress: 'update:progress',
   updateRequested: 'update:requested',

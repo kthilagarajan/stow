@@ -134,25 +134,34 @@ pub async fn go_to(state: State<'_, AppState>, path: Option<serde_json::Value>) 
     Ok(state.scanner.go_to(path).await)
 }
 
+// The panel must run on the main thread, inside Stow, so macOS brings it to the front.
 #[tauri::command(rename = "pickFolder")]
-pub async fn pick_folder() -> Option<String> {
-    off_main(run_folder_panel).await.ok().flatten()
+pub async fn pick_folder(app: AppHandle) -> Option<String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = sender.send(run_folder_panel());
+    })
+    .ok()?;
+    receiver.await.ok().flatten()
 }
 
 fn run_folder_panel() -> Option<String> {
-    let output = std::process::Command::new("osascript")
-        .args([
-            "-l",
-            "JavaScript",
-            "-e",
-            r#"ObjC.import("AppKit"); var panel = $.NSOpenPanel.openPanel; panel.setCanChooseDirectories(true); panel.setCanChooseFiles(false); panel.setAllowsMultipleSelection(false); panel.setShowsHiddenFiles(true); panel.setPrompt("Go"); panel.setMessage("Go to folder"); if (panel.runModal == $.NSModalResponseOK) { ObjC.unwrap(panel.URL.path) } else { "" }"#,
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
+    use objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
+    use objc2_foundation::{MainThreadMarker, NSString, NSURL};
+
+    let mtm = MainThreadMarker::new()?;
+    let panel = NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseDirectories(true);
+    panel.setCanChooseFiles(false);
+    panel.setAllowsMultipleSelection(false);
+    panel.setShowsHiddenFiles(true);
+    panel.setPrompt(Some(&NSString::from_str("Go")));
+    panel.setMessage(Some(&NSString::from_str("Choose a folder for Stow to measure.")));
+    panel.setDirectoryURL(Some(&NSURL::fileURLWithPath(&NSString::from_str(&crate::paths::home_dir()))));
+    if panel.runModal() != NSModalResponseOK {
         return None;
     }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let path = panel.URL()?.path()?.to_string();
     if path.is_empty() { None } else { Some(path) }
 }
 
@@ -254,4 +263,29 @@ pub async fn ask(target: Option<serde_json::Value>, prompt: Option<serde_json::V
 #[tauri::command(rename = "activity")]
 pub fn activity(state: State<'_, AppState>) -> Vec<ActivityTask> {
     state.activity.list()
+}
+
+#[tauri::command(rename = "devTools")]
+pub async fn dev_tools(state: State<'_, AppState>) -> Result<Vec<crate::devtools::DevTool>, String> {
+    if is_demo() {
+        return Ok(crate::devtools::demo_tools());
+    }
+    let _busy = state.activity.begin("tools", None);
+    let tools = state.devtools.clone();
+    off_main(move || tools.report_all()).await
+}
+
+// Only a tool id crosses over: each tool's cleanup command is fixed in devtools.rs.
+#[tauri::command(rename = "cleanDevTool")]
+pub async fn clean_dev_tool(state: State<'_, AppState>, id: Option<serde_json::Value>) -> Result<crate::devtools::DevCleanResult, String> {
+    let fail = |error: &str| crate::devtools::DevCleanResult { ok: false, error: Some(error.to_string()), output: String::new(), tool: None };
+    let Some(id) = string_arg(id.as_ref()).filter(|id| crate::devtools::DevTools::known(id)).map(str::to_string) else {
+        return Ok(fail("Stow does not know that tool."));
+    };
+    if is_demo() {
+        return Ok(fail("Demo mode does not change anything."));
+    }
+    let _busy = state.activity.begin("tool-clean", crate::devtools::DevTools::name(&id).map(str::to_string));
+    let tools = state.devtools.clone();
+    off_main(move || tools.clean(&id)).await
 }

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { segmentTotals } from '@shared/segments'
-import type { TrashTarget } from '@shared/types'
+import type { DevToolId, TrashTarget } from '@shared/types'
 import { FolderBrowser } from '@/components/browse/FolderBrowser'
 import { ShelfView } from '@/components/browse/ShelfView'
 import { FolderSkeleton } from '@/components/common/Skeletons'
+import { CleanToolDialog } from '@/components/dialogs/CleanToolDialog'
 import { EmptyTrashDialog } from '@/components/dialogs/EmptyTrashDialog'
 import { GoToDialog } from '@/components/dialogs/GoToDialog'
 import { TrashDialog } from '@/components/dialogs/TrashDialog'
@@ -13,10 +14,14 @@ import { AccessNote } from '@/components/layout/AccessNote'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { ShelfNav } from '@/components/layout/ShelfNav'
 import { StorageWall } from '@/components/layout/StorageWall'
+import { DevToolDetails } from '@/components/tools/DevToolDetails'
+import { DevToolsView } from '@/components/tools/DevToolsView'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useActivity } from '@/hooks/useActivity'
 import { useBrowse } from '@/hooks/useBrowse'
+import { useDevTools } from '@/hooks/useDevTools'
+import { usePlaces } from '@/hooks/usePlaces'
 import { useShortcut } from '@/hooks/useShortcut'
 import { useCompact } from '@/hooks/useStoredFlag'
 import { useStow } from '@/hooks/useStow'
@@ -29,11 +34,16 @@ export function App() {
   const browse = useBrowse()
   const update = useUpdate()
   const activity = useActivity()
+  const devTools = useDevTools()
+  const { places, add: addPlace, remove: removePlace } = usePlaces()
   const [shelf, setShelf] = useState<ShelfId>('everything')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trashTargets, setTrashTargets] = useState<TrashTarget[] | null>(null)
   const [confirmEmpty, setConfirmEmpty] = useState(false)
   const [goingTo, setGoingTo] = useState(false)
+  const [showTools, setShowTools] = useState(false)
+  const [toolId, setToolId] = useState<DevToolId | null>(null)
+  const [confirmTool, setConfirmTool] = useState<DevToolId | null>(null)
   const [compact, setCompact] = useCompact()
   const activeShelf = shelves.find((entry) => entry.id === shelf) ?? shelves[0]
 
@@ -61,6 +71,37 @@ export function App() {
   const progress = state.total > 0 ? Math.min(100, (state.completed / state.total) * 100) : 0
   const trashItem = state.items.find((item) => item.id === 'trash')
   const openPath = (filePath: string, label?: string, summary?: string) => void browse.open(filePath, label, summary)
+  const tool = devTools.tools?.find((entry) => entry.id === toolId) ?? null
+  const activePlace = !showTools && places.some((place) => place.path === browse.stack[0]?.path) ? (browse.stack[0]?.path ?? null) : null
+
+  function selectShelf(id: ShelfId): void {
+    setShowTools(false)
+    // Picking the shelf already active still closes whatever folder is open.
+    if (id === shelf) {
+      browse.reset()
+      setSelectedId(null)
+    }
+    setShelf(id)
+  }
+
+  function openTools(): void {
+    setShowTools(true)
+    browse.reset()
+    setSelectedId(null)
+    if (!devTools.tools) void devTools.check()
+  }
+
+  // Resolves to an error to show, or null once the folder is open; either way it lands in the sidebar.
+  function goTo(filePath: string): Promise<string | null> {
+    setShowTools(false)
+    setSelectedId(null)
+    return browse.goTo(filePath, addPlace)
+  }
+
+  async function addFolder(): Promise<void> {
+    const picked = await window.stow?.pickFolder()
+    if (picked) await goTo(picked)
+  }
 
   if (!available) {
     return (
@@ -94,9 +135,8 @@ export function App() {
           <StorageWall
             totals={totals}
             active={shelf}
-            onSelect={setShelf}
+            onSelect={selectShelf}
             ready={Boolean(state.volume)}
-            note={state.scanning || !state.scannedAt ? state.status : formatScannedAt(state.scannedAt)}
           />
           {state.done && <AccessNote limited={state.limited} />}
         </section>
@@ -104,19 +144,36 @@ export function App() {
         <div className="grid min-h-0 flex-1 grid-cols-[244px_minmax(0,1fr)_332px] gap-3 px-3 pb-3">
           <ShelfNav
             active={shelf}
-            onSelect={setShelf}
+            onSelect={selectShelf}
             totals={totals}
             items={state.items}
             used={state.volume?.usedBytes ?? 0}
             version={state.version}
+            note={state.scanning || !state.scannedAt ? state.status : formatScannedAt(state.scannedAt)}
             trashBytes={trashItem?.bytes ?? 0}
             loading={!state.loaded || !state.volume}
             emptying={emptying}
             activity={activity}
+            tools={showTools}
+            onTools={openTools}
+            places={places}
+            activePlace={activePlace}
+            onPlace={(place) => void goTo(place.path)}
+            onAddPlace={() => void addFolder()}
+            onRemovePlace={removePlace}
             onEmptyTrash={() => setConfirmEmpty(true)}
           />
           <main className="bg-sheet flex min-h-0 min-w-0 flex-col rounded-2xl">
-            {browse.opening && !browse.current ? (
+            {showTools ? (
+              <DevToolsView
+                tools={devTools.tools}
+                checking={devTools.checking}
+                selectedId={toolId}
+                compact={compact}
+                onSelect={setToolId}
+                onCheck={() => void devTools.check()}
+              />
+            ) : browse.opening && !browse.current ? (
               <FolderSkeleton compact={compact} />
             ) : browse.current ? (
               <FolderBrowser
@@ -149,23 +206,43 @@ export function App() {
           </main>
           <aside className="min-h-0 min-w-0" aria-label="Details">
             <ScrollArea className="h-full">
-              <div key={browse.focus?.path ?? selected?.id ?? 'none'} className="fade-in h-full">
-                <Inspector
-                  item={selected}
-                  focus={browse.focus}
-                  busyPath={busyPath}
-                  actionError={state.actionError}
-                  onReveal={(filePath) => void reveal(filePath)}
-                  onTrash={(target) => setTrashTargets([target])}
-                  onOpen={openPath}
-                />
-              </div>
+              {showTools ? (
+                <div key={tool?.id ?? 'none'} className="fade-in h-full">
+                  <DevToolDetails
+                    tool={tool}
+                    cleaning={devTools.cleaning === tool?.id}
+                    result={tool ? devTools.results[tool.id] : undefined}
+                    onClean={() => setConfirmTool(tool?.id ?? null)}
+                  />
+                </div>
+              ) : (
+                <div key={browse.focus?.path ?? selected?.id ?? 'none'} className="fade-in h-full">
+                  <Inspector
+                    item={selected}
+                    focus={browse.focus}
+                    busyPath={busyPath}
+                    actionError={state.actionError}
+                    onReveal={(filePath) => void reveal(filePath)}
+                    onTrash={(target) => setTrashTargets([target])}
+                    onOpen={openPath}
+                  />
+                </div>
+              )}
             </ScrollArea>
           </aside>
         </div>
       </div>
       <UpdateDialog update={update} current={state.version} />
-      <GoToDialog open={goingTo} onClose={() => setGoingTo(false)} onGo={browse.goTo} />
+      <GoToDialog open={goingTo} onClose={() => setGoingTo(false)} onGo={goTo} />
+      <CleanToolDialog
+        tool={devTools.tools?.find((entry) => entry.id === confirmTool) ?? null}
+        onCancel={() => setConfirmTool(null)}
+        onConfirm={() => {
+          const id = confirmTool
+          setConfirmTool(null)
+          if (id) void devTools.clean(id)
+        }}
+      />
       <EmptyTrashDialog
         open={confirmEmpty}
         bytes={trashItem?.bytes ?? 0}

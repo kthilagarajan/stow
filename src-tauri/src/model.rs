@@ -154,6 +154,8 @@ pub struct FolderEntry {
     pub verdict: Verdict,
     pub summary: String,
     pub trashable: bool,
+    #[serde(default)]
+    pub chosen: bool,
     pub measured: bool,
 }
 

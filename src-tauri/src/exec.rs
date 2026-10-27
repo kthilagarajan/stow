@@ -109,21 +109,39 @@ fn collect(mut child: std::process::Child, receiver: Receiver<String>, timeout: 
 }
 
 pub fn run_command(program: &str, args: &[String], timeout: Duration, processes: &Mutex<Vec<Tracked>>, current: impl Fn() -> bool) -> RunResult {
+    run_command_with(program, args, &[], false, timeout, processes, current)
+}
+
+/// Like `run_command`, with extra environment variables, and stderr kept in the output when `with_stderr` is set.
+pub fn run_command_with(
+    program: &str,
+    args: &[String],
+    envs: &[(&str, &str)],
+    with_stderr: bool,
+    timeout: Duration,
+    processes: &Mutex<Vec<Tracked>>,
+    current: impl Fn() -> bool,
+) -> RunResult {
     if !current() {
         return RunResult::empty();
     }
-    let mut child = match Command::new(program).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+    let mut command = Command::new(program);
+    command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(_) => return RunResult { stdout: String::new(), timed_out: false, code: Some(1) },
     };
     let pid = child.id();
     track(processes, pid);
     let (sender, receiver) = mpsc::channel();
+    if let Some(stderr) = child.stderr.take() {
+        pump(stderr, with_stderr.then(|| sender.clone()));
+    }
     if let Some(stdout) = child.stdout.take() {
         pump(stdout, Some(sender));
-    }
-    if let Some(stderr) = child.stderr.take() {
-        pump(stderr, None);
     }
     let result = collect(child, receiver, timeout, current);
     untrack(processes, pid);

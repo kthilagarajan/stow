@@ -7,6 +7,9 @@ use crate::paths;
 pub struct TrashRecord {
     pub verdict: Verdict,
     pub trashable: bool,
+    // Inside a folder the person opened with Go to folder that the scan never measured.
+    // Only these may go to the Bin while Stow still calls them keep.
+    pub chosen: bool,
 }
 
 const NEVER_PREFIX: &[&str] = &[
@@ -88,7 +91,7 @@ pub fn trash_decision(real_path: &str, home: &str, record: Option<TrashRecord>) 
     let Some(record) = record else {
         return Err("Stow did not measure that path.".to_string());
     };
-    if !record.trashable || record.verdict == Verdict::Mandatory || record.verdict == Verdict::Keep {
+    if !record.trashable || record.verdict == Verdict::Mandatory || (record.verdict == Verdict::Keep && !record.chosen) {
         return Err("Stow will not move this. It is here to keep.".to_string());
     }
 
@@ -98,7 +101,20 @@ pub fn trash_decision(real_path: &str, home: &str, record: Option<TrashRecord>) 
     if relative.is_empty() {
         return Err("That is your home folder.".to_string());
     }
-    if NEVER_EXACT.contains(&relative.as_str())
+    protected(&relative)
+}
+
+/// Whether things inside a folder reached with Go to folder may be offered for the Bin.
+pub fn can_choose(real_path: &str, home: &str) -> bool {
+    match relative_to_home(real_path, home) {
+        Some(relative) if relative.is_empty() => true,
+        Some(relative) => protected(&relative).is_ok(),
+        None => false,
+    }
+}
+
+fn protected(relative: &str) -> Result<(), String> {
+    if NEVER_EXACT.contains(&relative)
         || NEVER_PREFIX.iter().any(|fragment| relative == *fragment || relative.starts_with(&format!("{fragment}/")))
     {
         return Err("Stow will not move that part of your Library.".to_string());
@@ -123,11 +139,38 @@ mod tests {
     const HOME: &str = "/Users/alex";
 
     fn allow(verdict: Verdict) -> TrashRecord {
-        TrashRecord { verdict, trashable: true }
+        TrashRecord { verdict, trashable: true, chosen: false }
     }
 
     fn keep() -> TrashRecord {
-        TrashRecord { verdict: Verdict::Keep, trashable: false }
+        TrashRecord { verdict: Verdict::Keep, trashable: false, chosen: false }
+    }
+
+    fn chosen() -> TrashRecord {
+        TrashRecord { verdict: Verdict::Keep, trashable: true, chosen: true }
+    }
+
+    #[test]
+    fn moves_chosen_keep_but_not_protected_places() {
+        assert!(trash_decision("/Users/alex/Projects/old", HOME, Some(chosen())).is_ok());
+        assert_eq!(
+            trash_decision("/Users/alex/Projects/old", HOME, Some(TrashRecord { chosen: false, ..chosen() })).unwrap_err(),
+            "Stow will not move this. It is here to keep."
+        );
+        assert_eq!(trash_decision(HOME, HOME, Some(chosen())).unwrap_err(), "That is your home folder.");
+        assert_eq!(trash_decision("/Volumes/Backup/old", HOME, Some(chosen())).unwrap_err(), "That folder is outside your home folder.");
+        assert!(trash_decision("/Users/alex/Library/Keychains/login", HOME, Some(chosen())).is_err());
+        assert!(trash_decision("/Users/alex/Projects/Tool.app", HOME, Some(chosen())).is_err());
+    }
+
+    #[test]
+    fn chooses_only_unprotected_home_folders() {
+        assert!(can_choose(HOME, HOME));
+        assert!(can_choose("/Users/alex/Projects", HOME));
+        assert!(!can_choose("/Users/alex/Library", HOME));
+        assert!(!can_choose("/Users/alex/Library/Mail/V10", HOME));
+        assert!(!can_choose("/Users/alex/Applications/Tool.app", HOME));
+        assert!(!can_choose("/opt/homebrew", HOME));
     }
 
     #[test]
@@ -141,13 +184,13 @@ mod tests {
             trash_decision(
                 "/Users/alex/Library/Caches/npm",
                 HOME,
-                Some(TrashRecord { verdict: Verdict::Clear, trashable: false })
+                Some(TrashRecord { verdict: Verdict::Clear, trashable: false, chosen: false })
             )
             .unwrap_err(),
             "Stow will not move this. It is here to keep."
         );
         assert_eq!(
-            trash_decision("/Users/alex/Library/Keychains", HOME, Some(TrashRecord { verdict: Verdict::Mandatory, trashable: false }))
+            trash_decision("/Users/alex/Library/Keychains", HOME, Some(TrashRecord { verdict: Verdict::Mandatory, trashable: false, chosen: false }))
                 .unwrap_err(),
             "Stow will not move this. It is here to keep."
         );

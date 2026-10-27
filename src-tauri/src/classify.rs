@@ -15,6 +15,7 @@ fn labelled(verdict: Verdict, trashable: bool, summary: &str, detail: &str) -> C
 pub struct ParentClass {
     pub verdict: Verdict,
     pub trashable: bool,
+    pub chosen: bool,
 }
 
 pub fn classify_large_file(file_path: &str) -> ClassifiedFile {
@@ -133,6 +134,7 @@ fn cache_kind(name: &str) -> Option<Verdict> {
 pub struct EntryClass {
     pub verdict: Verdict,
     pub trashable: bool,
+    pub chosen: bool,
     pub summary: &'static str,
 }
 
@@ -141,17 +143,18 @@ pub fn classify_entry(name: &str, full_path: &str, parent: &ParentClass) -> Entr
     let lower_name = name.to_lowercase();
 
     if lower_path.contains(".photoslibrary") || lower_name.ends_with(".app") || lower_path.contains(".app/") {
-        return EntryClass { verdict: Verdict::Keep, trashable: false, summary: "Part of an app or a photo library. Stow will not move it." };
+        return EntryClass { chosen: false, verdict: Verdict::Keep, trashable: false, summary: "Part of an app or a photo library. Stow will not move it." };
     }
     if lower_path.contains("/.cargo/") && (lower_name == "registry" || lower_name == "git") {
-        return EntryClass { verdict: Verdict::Optional, trashable: true, summary: "Downloaded Rust crates. The next build fetches them again." };
+        return EntryClass { chosen: false, verdict: Verdict::Optional, trashable: true, summary: "Downloaded Rust crates. The next build fetches them again." };
     }
 
     if let Some(cache) = cache_kind(name) {
         if cache == Verdict::Clear {
-            return EntryClass { verdict: Verdict::Clear, trashable: true, summary: "A cache. The app rebuilds it. Your documents stay." };
+            return EntryClass { chosen: false, verdict: Verdict::Clear, trashable: true, summary: "A cache. The app rebuilds it. Your documents stay." };
         }
         return EntryClass {
+            chosen: false,
             verdict: Verdict::Optional,
             trashable: true,
             summary: "Cached app pieces. They download again if the app still wants them.",
@@ -159,6 +162,7 @@ pub fn classify_entry(name: &str, full_path: &str, parent: &ParentClass) -> Entr
     }
     if lower_name == "node_modules" {
         return EntryClass {
+            chosen: false,
             verdict: Verdict::Optional,
             trashable: true,
             summary: "Installed dependencies. The project stays. Install again if you need them.",
@@ -166,19 +170,21 @@ pub fn classify_entry(name: &str, full_path: &str, parent: &ParentClass) -> Entr
     }
     if lower_name.ends_with(".dmg") || lower_name.ends_with(".pkg") || lower_name.ends_with(".iso") {
         return EntryClass {
+            chosen: false,
             verdict: Verdict::Optional,
             trashable: true,
             summary: "An installer. If the app is already installed, this is usually safe to clear.",
         };
     }
     if parent.verdict == Verdict::Mandatory {
-        return EntryClass { verdict: Verdict::Mandatory, trashable: false, summary: "The account needs this. Stow will not move it." };
+        return EntryClass { chosen: false, verdict: Verdict::Mandatory, trashable: false, summary: "The account needs this. Stow will not move it." };
     }
     if PERSONAL.iter().any(|fragment| lower_path.contains(fragment)) {
-        return EntryClass { verdict: Verdict::Keep, trashable: false, summary: "Your files. Stow will not move them." };
+        return EntryClass { chosen: false, verdict: Verdict::Keep, trashable: false, summary: "Your files. Stow will not move them." };
     }
     if parent.verdict == Verdict::Clear {
         return EntryClass {
+            chosen: false,
             verdict: Verdict::Clear,
             trashable: parent.trashable,
             summary: "Inside a folder that is safe to clear. The app can rebuild it.",
@@ -186,15 +192,24 @@ pub fn classify_entry(name: &str, full_path: &str, parent: &ParentClass) -> Entr
     }
     if lower_path.contains("/library/application support/") || lower_path.contains("/library/containers/") {
         return EntryClass {
+            chosen: false,
             verdict: Verdict::Optional,
             trashable: true,
             summary: "Data this app stored. Moving it can make the app forget this part. The app stays installed.",
         };
     }
     if parent.verdict == Verdict::Optional {
-        return EntryClass { verdict: Verdict::Optional, trashable: parent.trashable, summary: "Inside an optional folder. Look at it before you move it." };
+        return EntryClass { chosen: false, verdict: Verdict::Optional, trashable: parent.trashable, summary: "Inside an optional folder. Look at it before you move it." };
     }
-    EntryClass { verdict: Verdict::Keep, trashable: false, summary: "Stow will not move this. Reveal it in Finder if you want to decide there." }
+    if parent.chosen {
+        return EntryClass {
+            chosen: true,
+            verdict: Verdict::Keep,
+            trashable: true,
+            summary: "In a folder you opened. Stow does not know what this is, so look before you move it.",
+        };
+    }
+    EntryClass { chosen: false, verdict: Verdict::Keep, trashable: false, summary: "Stow will not move this. Reveal it in Finder if you want to decide there." }
 }
 
 #[cfg(test)]
@@ -202,7 +217,19 @@ mod tests {
     use super::*;
 
     fn parent(verdict: Verdict, trashable: bool) -> ParentClass {
-        ParentClass { verdict, trashable }
+        ParentClass { verdict, trashable, chosen: false }
+    }
+
+    #[test]
+    fn unknown_entries_in_a_chosen_folder_can_move() {
+        let chosen = ParentClass { verdict: Verdict::Keep, trashable: true, chosen: true };
+        let notes = classify_entry("notes", "/Users/alex/Projects/notes", &chosen);
+        assert_eq!(notes.verdict, Verdict::Keep);
+        assert!(notes.trashable && notes.chosen);
+        let app = classify_entry("Tool.app", "/Users/alex/Projects/Tool.app", &chosen);
+        assert!(!app.trashable);
+        let personal = classify_entry("tax.pdf", "/Users/alex/Projects/Documents/tax.pdf", &chosen);
+        assert!(!personal.trashable);
     }
 
     #[test]

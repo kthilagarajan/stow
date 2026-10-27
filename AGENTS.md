@@ -19,9 +19,9 @@ Run `npm run typecheck`, `npm test`, and `cargo test --manifest-path src-tauri/C
 
 Stow can move a user's files to the Bin. These rules are what make that safe. Do not weaken them.
 
-1. **Rust decides what can be trashed, never the window.** `src-tauri/src/guard.rs` (`trash_decision`) only allows paths that Stow measured, that are inside the home folder, and whose verdict is `clear` or `optional`. It always refuses the home folder itself, sensitive Library folders (keychains, mail, photos and others), apps and photo libraries. Every command in `src-tauri/src/commands.rs` validates its arguments, because the page is not trusted.
-2. **Move to the Bin, never delete.** Use the macOS trash (`trash` crate, NSWorkspace recycle). The only permanent step is Empty Bin, which goes through Finder and is confirmed in the UI first.
-3. **Unknown means keep.** A folder outside the catalog (for example one reached with Go to folder) starts as `keep` and not trashable. `classify_entry` in `src-tauri/src/classify.rs` only loosens that for things it recognises, such as caches, `node_modules` and installers. A path the scan already labelled keeps its label wherever it is reached from (`to_folder_entry` in `src-tauri/src/scanner.rs`).
+1. **Rust decides what can be trashed, never the window.** `src-tauri/src/guard.rs` (`trash_decision`) only allows paths that Stow measured, that are inside the home folder, and whose verdict is `clear` or `optional` (or `keep` when `chosen`, see rule 3). It always refuses the home folder itself, sensitive Library folders (keychains, mail, photos and others), apps and photo libraries. Every command in `src-tauri/src/commands.rs` validates its arguments, because the page is not trusted.
+2. **Move to the Bin, never delete.** Use the macOS trash (`trash` crate, NSWorkspace recycle). The only permanent steps are Empty Bin, which goes through Finder, and a developer tool's own cleanup command (`src-tauri/src/devtools.rs`). Both are confirmed in the UI first and say there is no way back. The window sends only a tool id; each tool's command is fixed in `TOOLS`, and Stow never runs a command the window supplies.
+3. **Unknown means keep.** A folder outside the catalog (for example one reached with Go to folder) starts as `keep` and not trashable. `classify_entry` in `src-tauri/src/classify.rs` only loosens that for things it recognises, such as caches, `node_modules` and installers. A path the scan already labelled keeps its label wherever it is reached from (`to_folder_entry` in `src-tauri/src/scanner.rs`). The one exception is a folder inside the home folder that the person opens with Go to folder and the scan never measured: what Stow does not recognise inside it stays `keep` but is marked `chosen` and may go to the Bin, with a stronger warning in the Move to Bin dialog. `guard::can_choose` and `trash_decision` still refuse the home folder itself, the protected Library folders, apps and photo libraries.
 4. **Nothing about the Mac leaves it.** The only network code is `src-tauri/src/updates.rs`: it reads public release information from this repository on GitHub, and downloads a release asset when the person asks. It sends no paths, sizes or identifiers. It only downloads from `https://github.com/<repo>/releases/download/`, into a temporary folder, and only installs an app whose bundle identifier and version match the release. Do not add other network calls. Ask AI only builds a prompt and hands it to a desktop app or the clipboard (`src-tauri/src/assistant.rs`).
 5. **Show names exactly as they are on disk**, including a leading dot and the original case. A friendlier catalog label may appear beside the name (`diskName` and `tagFor` in `src/renderer/src/lib/browse.ts`), never instead of it.
 6. **No real data in the repository.** Screenshots, tests and fixtures use demo mode (`src-tauri/src/demo.rs`) or invented paths such as `/Users/alex`. Never commit a real scan, a real home path, or credentials.
@@ -39,7 +39,7 @@ src-tauri/     Rust: scanning, trashing, persistence, and Tauri commands.
 
 - `types.ts` holds every type that crosses the command boundary, including `StowApi`, the shape of `window.stow`.
 - `ipc.ts` lists the event names the bridge listens for (`scan:event`, `folder:update`, `update:progress`, `update:requested`, `activity:update`).
-- `segments.ts` splits the disk into the storage bar's groups. `items.ts` does the Bin bookkeeping (`applyTrash`, `addToTrash`, `clearTrash`). `version.ts` compares release versions. `listing.ts` shapes a folder listing for the window. All are pure functions with tests beside them.
+- `segments.ts` splits the disk into the storage bar's groups. `items.ts` does the Bin bookkeeping (`applyTrash`, `addToTrash`, `clearTrash`). `version.ts` compares release versions. `listing.ts` shapes a folder listing for the window. `places.ts` keeps the sidebar's Folders list. All are pure functions with tests beside them.
 
 ### Rust (`src-tauri/src`)
 
@@ -58,6 +58,7 @@ src-tauri/     Rust: scanning, trashing, persistence, and Tauri commands.
 | `store.rs` | Saves the last scan and folder listings to `stow.sqlite` in the app's user data folder (`rusqlite`). `Db` queues writes on one thread; reads go through `Db::read` from a blocking task. |
 | `info.rs` | Per-item metadata for the details pane: dates (with last opened from Spotlight) and item count. |
 | `updates.rs` | Checks GitHub releases for a newer version, downloads the zipped app for this chip (checked against GitHub's SHA-256), unpacks it, and on Restart to update swaps it in for the running app with a small shell script and reopens it. The repository comes from `package.json` (`repository.url`); `STOW_UPDATE_REPO` overrides it for testing. |
+| `devtools.rs` | Developer tools (Docker, npm, pnpm, Yarn, Homebrew, pip, Go, unavailable simulators): finds each one on the login shell's PATH, measures what its cleanup frees, and runs its fixed cleanup command. |
 | `demo.rs` | Demo mode (`STOW_DEMO=1`): made-up scan data built from the real catalog, used by `npm run demo` and for screenshots. It keeps its own profile and never touches files. |
 | `volume.rs`, `icons.rs`, `assistant.rs`, `exec.rs` | Disk totals, Finder icons, Ask AI hand-off, and child-process helpers. |
 
@@ -69,11 +70,12 @@ src-tauri/     Rust: scanning, trashing, persistence, and Tauri commands.
 | --- | --- |
 | `components/layout` | `AppHeader`, `ShelfNav`, `StorageWall` (the storage bar), `AccessNote`, `ActivityStatus` (background work, under the shelves) |
 | `components/browse` | `ShelfView` (a shelf with its filter), `ItemList`, `FolderBrowser`, `SelectionBar` |
+| `components/tools` | `DevToolsView` (the developer tools list) and `DevToolDetails` (its details pane, with Clean up) |
 | `components/inspector` | `Inspector` (the details pane), `Metadata` |
-| `components/dialogs` | Move to Bin, Empty Bin, Go to folder, Ask AI, Update |
+| `components/dialogs` | Move to Bin, Empty Bin, Go to folder, Clean up a developer tool, Ask AI, Update |
 | `components/common` | Shared pieces: `ListRow` and `IconAction`, `Skeleton`s, `FileIcon`, `ActionTile` |
 | `components/ui` | Unstyled-to-themed primitives in the shadcn/ui style. Keep these generic. |
-| `hooks` | `useStow` (scan state and actions), `useBrowse` (folder navigation), `useSelection` (⌘-click picking), `useSteadyRows` (rows that hold still under the pointer and slide into place), `useUpdate` (release checks and download), `useActivity` (background work), `useTheme`, `useShortcut`, `useStoredFlag`, `useFileIcons` |
+| `hooks` | `useStow` (scan state and actions), `useBrowse` (folder navigation), `useSelection` (⌘-click picking), `useSteadyRows` (rows that hold still under the pointer and slide into place), `useUpdate` (release checks and download), `useActivity` (background work), `useDevTools` (developer tool reports and cleanups), `usePlaces` (the sidebar's Folders), `useTheme`, `useShortcut`, `useStoredFlag`, `useFileIcons` |
 | `lib` | Pure helpers: formatting, verdict styles and shelves, theme, the Bin/Trash word, browse helpers |
 | `state.ts` | The reducer for scan state. The window applies Bin moves optimistically through `@shared/items`. |
 

@@ -5,6 +5,8 @@ import type {
   AppMeta,
   AssistantResult,
   AssistantTarget,
+  DevCleanResult,
+  DevTool,
   FileIconSet,
   FolderResult,
   FolderUpdate,
@@ -73,7 +75,9 @@ const api: StowApi = {
   ask: (target: AssistantTarget, prompt: string) => invoke<AssistantResult>('ask', { target, prompt }),
   onEvent,
   activity: () => invoke<ActivityTask[]>('activity'),
-  onActivity
+  onActivity,
+  devTools: () => invoke<DevTool[]>('devTools'),
+  cleanDevTool: (id) => invoke<DevCleanResult>('cleanDevTool', { id })
 }
 
 window.stow = api

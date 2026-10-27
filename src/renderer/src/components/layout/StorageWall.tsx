@@ -1,5 +1,4 @@
 import type { SegmentTotals } from '@shared/segments'
-import { Clock } from 'lucide-react'
 import type { ShelfId } from '@/lib/verdicts'
 import { verdicts } from '@/lib/verdicts'
 import { formatBytes } from '@/lib/format'
@@ -30,25 +29,16 @@ export function StorageWall({
   totals,
   active,
   onSelect,
-  ready,
-  note
+  ready
 }: {
   totals: SegmentTotals
   active: ShelfId
   onSelect: (shelf: ShelfId) => void
   ready: boolean
-  note: string
 }) {
   if (!ready) {
     return (
-      <div aria-hidden>
-        <div className="skeleton h-[92px] rounded-[22px]" />
-        <div className="mt-2.5 flex gap-4">
-          {[20, 16, 24, 18, 20, 12].map((width, index) => (
-            <span key={index} className="skeleton h-3" style={{ width: `${width * 4}px` }} />
-          ))}
-        </div>
-      </div>
+      <div aria-hidden className="skeleton h-[92px] rounded-[22px]" />
     )
   }
 
@@ -98,25 +88,6 @@ export function StorageWall({
             </button>
           )
         })}
-      </div>
-      <div className="mt-2.5 flex items-start justify-between gap-4">
-        <ul className="flex flex-wrap gap-x-4 gap-y-1">
-          {piecesFrom(totals).map((piece) => (
-            <li key={piece.id} className="flex items-center gap-1.5 text-xs">
-              <span
-                className={cn('size-2 rounded-full', piece.striped && 'bin-free border-line border')}
-                style={{ background: piece.striped ? undefined : piece.color }}
-                aria-hidden
-              />
-              <span className="text-ink">{piece.label}</span>
-              <span className="text-mist font-mono">{formatBytes(piece.bytes)}</span>
-            </li>
-          ))}
-        </ul>
-        <p role="status" className="text-mist flex shrink-0 items-center gap-1.5 text-xs">
-          <Clock className="size-3.5" aria-hidden />
-          {note}
-        </p>
       </div>
     </div>
   )

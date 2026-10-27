@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FolderEntry } from '@shared/types'
+import type { Place } from '@shared/places'
 import { applyFolderProgress, mergeListing, noteFolderUpdate, orderEntries, type FolderProgress } from '@shared/listing'
 import { applyBrowseTrash, canLookInside, type BrowseFrame, type FocusDetail } from '@/lib/browse'
 
@@ -63,8 +64,8 @@ export function useBrowse() {
     }
   }
 
-  // Resolves to an error message, or null once the folder is showing.
-  async function goTo(filePath: string): Promise<string | null> {
+  // Resolves to an error message, or null once the folder is showing. `onOpened` gets the folder as it is on disk.
+  async function goTo(filePath: string, onOpened?: (place: Place) => void): Promise<string | null> {
     if (!window.stow) return 'Open this window from the Stow app.'
     setOpening(true)
     setError(null)
@@ -73,6 +74,7 @@ export function useBrowse() {
       const result = await window.stow.goTo(filePath)
       if (!result.ok) return result.error
       setStack([paint({ ...result.listing, label: result.listing.name }, progress.current)])
+      onOpened?.({ path: result.listing.path, name: result.listing.name })
       return null
     } finally {
       setOpening(false)

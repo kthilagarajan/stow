@@ -27,6 +27,10 @@ function describe(task: ActivityTask): { title: string; detail?: string } {
       return { title: 'Checking for updates' }
     case 'download':
       return { title: task.target ? `Downloading Stow ${task.target}` : 'Downloading the update' }
+    case 'tools':
+      return { title: 'Checking developer tools' }
+    case 'tool-clean':
+      return { title: `Cleaning up ${task.target ?? 'a developer tool'}` }
   }
 }
 

@@ -191,6 +191,7 @@ pub fn demo_listing(file_path: &str) -> FolderResult {
                 "A folder inside this one.".to_string()
             },
             trashable: owner.trashable,
+            chosen: false,
             measured: true,
             name,
             bytes,

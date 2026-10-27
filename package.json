@@ -10,7 +10,7 @@
     "vite:dev": "vite",
     "vite:build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts && tsx src/shared/listing.test.ts",
+    "test": "tsx src/shared/segments.test.ts && tsx src/shared/items.test.ts && tsx src/shared/version.test.ts && tsx src/shared/listing.test.ts && tsx src/shared/places.test.ts",
     "dist": "tauri build",
     "demo": "STOW_DEMO=1 tauri dev"
   },

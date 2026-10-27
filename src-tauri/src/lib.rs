@@ -7,6 +7,7 @@ mod catalog;
 mod classify;
 mod commands;
 mod demo;
+mod devtools;
 mod describe;
 mod disk;
 mod exec;
@@ -30,6 +31,7 @@ use tauri::{Manager, RunEvent};
 
 use crate::activity::Activity;
 use crate::demo::is_demo;
+use crate::devtools::DevTools;
 use crate::icons::Icons;
 use crate::scanner::Scanner;
 use crate::store::{Db, Store};
@@ -41,6 +43,7 @@ pub struct AppState {
     pub icons: Arc<Icons>,
     pub updates: Arc<Mutex<Updates>>,
     pub activity: Arc<Activity>,
+    pub devtools: Arc<DevTools>,
     db: Db,
 }
 
@@ -79,7 +82,7 @@ pub fn run() {
             let icons = Arc::new(Icons::new());
             let warming = icons.clone();
             std::thread::spawn(move || warming.warm());
-            app.manage(AppState { scanner, icons, updates: Arc::new(Mutex::new(Updates::new())), activity, db });
+            app.manage(AppState { scanner, icons, updates: Arc::new(Mutex::new(Updates::new())), activity, devtools: Arc::new(DevTools::new()), db });
             menu::install_menu(app.handle())?;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_background_color(Some(background(system_dark())));
@@ -109,6 +112,8 @@ pub fn run() {
             commands::file_icons,
             commands::ask,
             commands::activity,
+            commands::dev_tools,
+            commands::clean_dev_tool,
         ])
         .build(tauri::generate_context!())
         .expect("error while running Stow")
@@ -117,6 +122,7 @@ pub fn run() {
                 if let Some(state) = app.try_state::<AppState>() {
                     state.scanner.stop();
                     state.icons.stop();
+                    state.devtools.stop();
                 }
             }
         });

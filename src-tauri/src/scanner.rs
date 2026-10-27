@@ -54,6 +54,7 @@ struct CachedListing {
 struct Label {
     verdict: Verdict,
     trashable: bool,
+    chosen: bool,
     summary: String,
 }
 
@@ -495,7 +496,9 @@ impl Scanner {
         {
             let mut inner = lock(&self.shared.inner);
             if owner(&inner, &real).is_none() {
-                add_record(&mut inner, &real, Verdict::Keep, false);
+                // Unknown still means keep, but the person picked this folder, so its contents may go to the Bin with a warning.
+                let chosen = guard::can_choose(&real, &inner.home);
+                add_record(&mut inner, &real, Verdict::Keep, chosen, chosen);
             }
         }
         self.open_folder(&real).await
@@ -528,11 +531,11 @@ impl Scanner {
                 return FolderResult::err("That is a file. Reveal it in Finder to open it.");
             }
             let class = if owned.exact {
-                Label { verdict: owned.verdict, trashable: owned.trashable, summary: "Files and folders inside this one, largest first.".to_string() }
+                Label { verdict: owned.verdict, trashable: owned.trashable, chosen: owned.chosen, summary: "Files and folders inside this one, largest first.".to_string() }
             } else {
-                let classified = classify_entry(&paths::basename(&real), &real, &ParentClass { verdict: owned.verdict, trashable: owned.trashable });
-                add_record(&mut inner, &real, classified.verdict, classified.trashable);
-                Label { verdict: classified.verdict, trashable: classified.trashable, summary: classified.summary.to_string() }
+                let classified = classify_entry(&paths::basename(&real), &real, &ParentClass { verdict: owned.verdict, trashable: owned.trashable, chosen: owned.chosen });
+                add_record(&mut inner, &real, classified.verdict, classified.trashable, classified.chosen);
+                Label { verdict: classified.verdict, trashable: classified.trashable, chosen: classified.chosen, summary: classified.summary.to_string() }
             };
             if let Some(job) = inner.running.get(&real).filter(|job| job.generation == generation) {
                 return listing_from_job(&inner, job);
@@ -578,7 +581,7 @@ impl Scanner {
         };
         for entry in &job.entries {
             let listed = to_folder_entry(&inner, entry, &class, entry.sized);
-            add_record(&mut inner, &listed.path, listed.verdict, listed.trashable);
+            add_record(&mut inner, &listed.path, listed.verdict, listed.trashable, listed.chosen);
         }
         let result = listing_from_job(&inner, &job);
         inner.running.insert(real.clone(), job);
@@ -591,13 +594,14 @@ impl Scanner {
 struct Owner {
     verdict: Verdict,
     trashable: bool,
+    chosen: bool,
     exact: bool,
 }
 
 // The nearest measured folder above the path. Walking up keeps this fast however much has been browsed.
 fn owner(inner: &Inner, file_path: &str) -> Option<Owner> {
     if let Some(record) = guard::lookup_record(&inner.registry, file_path) {
-        return Some(Owner { verdict: record.verdict, trashable: record.trashable, exact: true });
+        return Some(Owner { verdict: record.verdict, trashable: record.trashable, chosen: record.chosen, exact: true });
     }
     let mut best: Option<(usize, TrashRecord)> = None;
     for form in guard::path_keys(file_path) {
@@ -608,7 +612,7 @@ fn owner(inner: &Inner, file_path: &str) -> Option<Owner> {
             }
         }
     }
-    best.map(|(_, record)| Owner { verdict: record.verdict, trashable: record.trashable, exact: false })
+    best.map(|(_, record)| Owner { verdict: record.verdict, trashable: record.trashable, chosen: record.chosen, exact: false })
 }
 
 fn ancestors(file_path: &str) -> impl Iterator<Item = String> {
@@ -623,19 +627,23 @@ fn ancestors(file_path: &str) -> impl Iterator<Item = String> {
     })
 }
 
-fn add_record(inner: &mut Inner, file_path: &str, verdict: Verdict, trashable: bool) {
+fn add_record(inner: &mut Inner, file_path: &str, verdict: Verdict, trashable: bool, chosen: bool) {
     if file_path.is_empty() {
         return;
     }
     for key in guard::path_keys(file_path) {
         match inner.registry.get(&key).copied() {
             None => {
-                inner.registry.insert(key, TrashRecord { verdict, trashable });
+                inner.registry.insert(key, TrashRecord { verdict, trashable, chosen });
             }
             Some(existing) => {
                 inner.registry.insert(
                     key,
-                    TrashRecord { verdict: guard::stricter_verdict(existing.verdict, verdict), trashable: existing.trashable && trashable },
+                    TrashRecord {
+                        verdict: guard::stricter_verdict(existing.verdict, verdict),
+                        trashable: existing.trashable && trashable,
+                        chosen: existing.chosen && chosen,
+                    },
                 );
             }
         }
@@ -645,10 +653,10 @@ fn add_record(inner: &mut Inner, file_path: &str, verdict: Verdict, trashable: b
 fn register(inner: &mut Inner, item: &StorageItem) {
     let child_paths: HashSet<String> = item.children.iter().map(|child| paths::trim_trailing_slash(&child.path)).collect();
     if !item.path.is_empty() && !child_paths.contains(&paths::trim_trailing_slash(&item.path)) {
-        add_record(inner, &item.path, item.verdict, item.trashable);
+        add_record(inner, &item.path, item.verdict, item.trashable, false);
     }
     for child in &item.children {
-        add_record(inner, &child.path, child.verdict, child.trashable);
+        add_record(inner, &child.path, child.verdict, child.trashable, false);
     }
 }
 
@@ -771,10 +779,14 @@ fn reuse_sizes(preview: &mut [MeasuredEntry], saved: &[MeasuredEntry]) {
 }
 
 fn to_folder_entry(inner: &Inner, entry: &MeasuredEntry, parent: &Label, measured: bool) -> FolderEntry {
-    let mut classified = classify_entry(&entry.name, &entry.path, &ParentClass { verdict: parent.verdict, trashable: parent.trashable });
+    let mut classified = classify_entry(&entry.name, &entry.path, &ParentClass { verdict: parent.verdict, trashable: parent.trashable, chosen: parent.chosen });
     if let Some(known) = guard::lookup_record(&inner.registry, &entry.path) {
         classified.verdict = known.verdict;
         classified.trashable = known.trashable;
+        classified.chosen = known.chosen;
+    }
+    if classified.chosen && !guard::can_choose(&entry.path, &inner.home) {
+        classified.trashable = false;
     }
     FolderEntry {
         name: entry.name.clone(),
@@ -784,6 +796,7 @@ fn to_folder_entry(inner: &Inner, entry: &MeasuredEntry, parent: &Label, measure
         verdict: classified.verdict,
         summary: classified.summary.to_string(),
         trashable: classified.trashable,
+        chosen: classified.chosen,
         measured,
     }
 }
@@ -1014,7 +1027,7 @@ fn finish_folder(shared: &Shared, folder: &str, token: u64, generation: u64, den
     let result = listing_result(&inner, folder, &job.class, &listing, false, token);
     if let Some(shown) = result.listing.as_ref() {
         for entry in &shown.entries {
-            add_record(&mut inner, &entry.path, entry.verdict, entry.trashable);
+            add_record(&mut inner, &entry.path, entry.verdict, entry.trashable, entry.chosen);
         }
     }
     drop(inner);
@@ -1249,7 +1262,7 @@ async fn measure_root(shared: Arc<Shared>, spec: RootSpec, generation: u64) -> O
             note_size(&mut inner, &entry.path, entry.bytes);
         }
     }
-    let parent = ParentClass { verdict: spec.verdict, trashable: spec.trashable };
+    let parent = ParentClass { verdict: spec.verdict, trashable: spec.trashable, chosen: false };
     let children = entries.iter().filter(|entry| entry.bytes >= 1_000_000).take(PREVIEW_CHILDREN).map(|entry| child_of(&spec, entry, &parent)).collect();
     let mut detail = spec.detail.clone();
     if timed_out {

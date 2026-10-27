@@ -26,6 +26,8 @@ export function TrashDialog({
 
   const many = (targets?.length ?? 0) > 1
   const cautious = targets?.some((target) => target.verdict !== 'clear') ?? false
+  // Keep is only offered for things inside a folder the person opened themselves, which Stow cannot vouch for.
+  const unknown = targets?.some((target) => target.verdict === 'keep') ?? false
   const shown = targets?.slice(0, 8) ?? []
   const extra = (targets?.length ?? 0) - shown.length
   const bytes = targets?.reduce((sum, target) => sum + (target.bytes ?? 0), 0) ?? 0
@@ -54,6 +56,12 @@ export function TrashDialog({
                 : `They stay in the ${BIN} until you empty it or put them back. Apps rebuild caches.`}
             </p>
           ) : null}
+          {unknown && (
+            <p role="alert" className="border-coral/30 bg-coral/10 text-coral mt-3 rounded-xl border px-3 py-2.5 text-sm leading-relaxed">
+              {many ? 'Stow does not recognise some of these.' : 'Stow does not recognise this.'} No app will rebuild {many ? 'them' : 'it'}, and
+              it could be your only copy. Check it in Finder first. Until you empty the {BIN}, you can put {many ? 'them' : 'it'} back.
+            </p>
+          )}
           {many ? (
             <ul className="mt-4 flex flex-col gap-1.5">
               {shown.map((target) => (

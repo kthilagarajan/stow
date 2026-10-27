@@ -185,6 +185,8 @@ export type ActivityKind =
   | 'icons'
   | 'update'
   | 'download'
+  | 'tools'
+  | 'tool-clean'
 
 // Work running in the background. The window words it from `kind`; `target` is a name as it is on disk.
 export interface ActivityTask {
@@ -194,6 +196,32 @@ export interface ActivityTask {
   done?: number
   total?: number
   startedAt: number
+}
+
+export type DevToolId = 'docker' | 'npm' | 'pnpm' | 'yarn' | 'homebrew' | 'pip' | 'go' | 'simulators'
+
+// A developer tool that can clean up after itself. Stow runs only the fixed `command` for each one.
+export interface DevTool {
+  id: DevToolId
+  name: string
+  installed: boolean
+  // The cleanup can run now (Docker, for example, has to be open).
+  ready: boolean
+  bytes: number | null
+  // 'frees' when bytes is what the cleanup removes; 'holds' when it is everything the tool keeps.
+  estimate: 'frees' | 'holds'
+  note: string | null
+  summary: string
+  detail: string
+  command: string
+}
+
+export interface DevCleanResult {
+  ok: boolean
+  error?: string
+  // What the tool printed, trimmed to the end.
+  output: string
+  tool: DevTool | null
 }
 
 export type UpdateResult = { ok: true } | { ok: false; error: string }
@@ -226,4 +254,6 @@ export interface StowApi {
   onEvent: (listener: (event: ScanEvent) => void) => () => void
   activity: () => Promise<ActivityTask[]>
   onActivity: (listener: (tasks: ActivityTask[]) => void) => () => void
+  devTools: () => Promise<DevTool[]>
+  cleanDevTool: (id: DevToolId) => Promise<DevCleanResult>
 }

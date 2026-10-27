@@ -30,7 +30,7 @@ import { formatScannedAt } from '@/lib/format'
 import { shelves, type ShelfId } from '@/lib/verdicts'
 
 export function App() {
-  const { available, state, busyPath, emptying, reveal, trashMany, emptyTrash, rescan } = useStow()
+  const { available, state, busyPath, emptying, emptyError, dismissEmptyError, reveal, trashMany, emptyTrash, rescan } = useStow()
   const browse = useBrowse()
   const update = useUpdate()
   const activity = useActivity()
@@ -123,6 +123,7 @@ export function App() {
           onToggleCompact={() => setCompact(!compact)}
           onGoTo={() => setGoingTo(true)}
           onScan={rescan}
+          note={state.scanning || !state.scannedAt ? state.status : formatScannedAt(state.scannedAt)}
           update={
             update.info
               ? { version: update.info.version, downloading: update.phase === 'downloading', ready: update.phase === 'ready', onOpen: update.request }
@@ -130,7 +131,7 @@ export function App() {
           }
         />
 
-        <section className="px-5 pt-4 pb-4" aria-label="Disk">
+        <section className="px-5 pt-4 pb-3" aria-label="Disk">
           {state.volumeError && <p className="text-coral mb-2 text-sm">{state.volumeError}</p>}
           <StorageWall
             totals={totals}
@@ -141,7 +142,7 @@ export function App() {
           {state.done && <AccessNote limited={state.limited} />}
         </section>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[244px_minmax(0,1fr)_332px] gap-3 px-3 pb-3">
+        <div className="grid min-h-0 flex-1 grid-cols-[244px_minmax(0,1fr)_332px] grid-rows-[minmax(0,1fr)] gap-3 px-3 pb-3">
           <ShelfNav
             active={shelf}
             onSelect={selectShelf}
@@ -149,10 +150,11 @@ export function App() {
             items={state.items}
             used={state.volume?.usedBytes ?? 0}
             version={state.version}
-            note={state.scanning || !state.scannedAt ? state.status : formatScannedAt(state.scannedAt)}
             trashBytes={trashItem?.bytes ?? 0}
             loading={!state.loaded || !state.volume}
             emptying={emptying}
+            emptyError={emptyError}
+            onDismissEmptyError={dismissEmptyError}
             activity={activity}
             tools={showTools}
             onTools={openTools}

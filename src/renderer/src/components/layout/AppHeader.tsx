@@ -19,6 +19,7 @@ export function AppHeader({
   onToggleCompact,
   onGoTo,
   onScan,
+  note,
   update
 }: {
   volume: VolumeInfo | null
@@ -30,6 +31,8 @@ export function AppHeader({
   onToggleCompact: () => void
   onGoTo: () => void
   onScan: () => void
+  // When the disk was last scanned, or what the scan is doing now.
+  note: string
   // Shown only when a newer release is out.
   update: { version: string; downloading: boolean; ready: boolean; onOpen: () => void } | null
 }) {
@@ -89,6 +92,9 @@ export function AppHeader({
         <IconButton label="Compact rows" hint={compact ? 'Roomy rows' : 'Compact rows'} pressed={compact} onClick={onToggleCompact}>
           {compact ? <Rows4 aria-hidden /> : <Rows3 aria-hidden />}
         </IconButton>
+        <p role="status" className="text-mist max-w-56 truncate pl-2 text-xs" title={note}>
+          {note}
+        </p>
         <Button className="ml-1 h-8" onClick={onScan} disabled={scanning} aria-label={scanLabel}>
           <RefreshCw className={scanning ? 'motion-safe:animate-spin' : undefined} aria-hidden />
           {scanLabel}

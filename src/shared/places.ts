@@ -1,4 +1,5 @@
 // Folders kept in the sidebar: the ones reached with Go to folder, newest first.
+// A folder already listed keeps its place, so the list holds still while the person moves between them.
 export interface Place {
   path: string
   name: string
@@ -7,7 +8,8 @@ export interface Place {
 export const MAX_PLACES = 10
 
 export function addPlace(places: Place[], place: Place, max = MAX_PLACES): Place[] {
-  return [place, ...places.filter((entry) => entry.path !== place.path)].slice(0, max)
+  if (places.some((entry) => entry.path === place.path)) return places
+  return [place, ...places].slice(0, max)
 }
 
 export function removePlace(places: Place[], filePath: string): Place[] {

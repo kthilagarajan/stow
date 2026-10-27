@@ -2,7 +2,7 @@ import type { SegmentTotals } from '@shared/segments'
 import type { Place } from '@shared/places'
 import type { ActivityTask, StorageItem } from '@shared/types'
 import type { ReactNode } from 'react'
-import { Clock, Folder, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { Folder, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import { IconAction } from '@/components/common/ListRow'
 import { Skeleton } from '@/components/common/Skeletons'
 import { ActivityStatus } from '@/components/layout/ActivityStatus'
@@ -24,9 +24,10 @@ export function ShelfNav({
   items,
   used,
   version,
-  note,
   trashBytes,
   emptying,
+  emptyError,
+  onDismissEmptyError,
   loading,
   activity,
   tools,
@@ -44,10 +45,11 @@ export function ShelfNav({
   items: StorageItem[]
   used: number
   version: string | null
-  // When the disk was last scanned, or what the scan is doing now.
-  note: string
   trashBytes: number
   emptying: boolean
+  // Why the last Empty Bin did not go through, until the person closes it.
+  emptyError: string | null
+  onDismissEmptyError: () => void
   loading: boolean
   activity: ActivityTask[]
   // The developer tools view is showing instead of a shelf.
@@ -63,7 +65,7 @@ export function ShelfNav({
 }) {
   const shelfShowing = !tools && !activePlace
   return (
-    <nav aria-label="What to show" className="flex h-full min-h-0 flex-col rounded-2xl px-2 py-3">
+    <nav aria-label="What to show" className="flex h-full min-h-0 flex-col rounded-2xl px-2 pb-3">
       <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
         <ul className="flex flex-col gap-1">
           {shelves.map((shelf) => (
@@ -85,16 +87,16 @@ export function ShelfNav({
               </NavButton>
             </li>
           ))}
-          <li className="mt-2">
-            <NavButton selected={tools} onClick={onTools}>
-              <span className="bg-harbor/10 text-harbor grid size-6 shrink-0 place-items-center rounded-md" aria-hidden>
-                <TerminalSquare className="size-3.5" />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">Developer tools</span>
-            </NavButton>
-          </li>
         </ul>
-        <section aria-labelledby="places-title" className="mt-4">
+        <div className="border-line mt-2 border-t pt-2">
+          <NavButton selected={tools} onClick={onTools}>
+            <span className="bg-harbor/10 text-harbor grid size-6 shrink-0 place-items-center rounded-md" aria-hidden>
+              <TerminalSquare className="size-3.5" />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">Developer tools</span>
+          </NavButton>
+        </div>
+        <section aria-labelledby="places-title" className="border-line mt-2 border-t pt-2">
           <div className="flex items-center justify-between pr-0.5 pl-2.5">
             <h2 id="places-title" className="text-mist text-[11px] font-semibold tracking-wide uppercase">
               Folders
@@ -122,8 +124,14 @@ export function ShelfNav({
           )}
         </section>
       </div>
-      <div className="mt-auto px-1 pt-4">
+      <div className="mt-auto pt-4">
         <ActivityStatus tasks={activity} />
+        {emptyError && (
+          <div role="alert" className="fade-in border-coral/30 bg-coral/10 mb-2 flex items-start gap-1 rounded-xl border py-2 pr-1 pl-2.5">
+            <p className="text-ink min-w-0 flex-1 pt-0.5 text-xs leading-relaxed">{emptyError}</p>
+            <IconAction label="Close" icon={X} onClick={onDismissEmptyError} />
+          </div>
+        )}
         <button
           type="button"
           onClick={onEmptyTrash}
@@ -139,11 +147,7 @@ export function ShelfNav({
             {trashBytes > 0 && <span className="font-mono text-[11px]">{formatBytes(trashBytes)}</span>}
           </span>
         </button>
-        <p role="status" className="text-mist flex items-center gap-1.5 px-1.5 pt-3 text-xs">
-          <Clock className="size-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{note}</span>
-        </p>
-        {version && <p className="text-mist/70 px-1.5 pt-1 text-[11px]">Version {version}</p>}
+        {version && <p className="text-mist/70 px-2.5 pt-3 text-[11px]">Version {version}</p>}
       </div>
     </nav>
   )
@@ -158,7 +162,7 @@ function NavButton({ selected, onClick, title, children }: { selected: boolean; 
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-[background-color,box-shadow,transform] duration-200 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-harbor',
-        selected ? 'bg-raised ring-line shadow-[0_8px_24px_rgb(var(--shadow)/0.08)] ring-1' : 'hover:bg-raised/60'
+        selected ? 'bg-raised' : 'hover:bg-raised/60'
       )}
     >
       {children}

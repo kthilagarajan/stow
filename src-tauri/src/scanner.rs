@@ -123,6 +123,20 @@ struct Approved {
     bytes: Option<u64>,
 }
 
+// The script reports AppleScript's error number on stdout, so a refusal can be told apart from a cancel.
+const EMPTY_TRASH_SCRIPT: &str = "try\n  tell application \"Finder\" to empty trash\non error number n\n  return n\nend try\nreturn 0";
+
+fn empty_trash_failure(code: Option<i32>) -> TrashResult {
+    match code {
+        // The person cancelled, so there is nothing to tell them.
+        Some(-128) => TrashResult { ok: false, error: None, bytes: None },
+        Some(-1743) => TrashResult::err(
+            "Stow isn't allowed to control Finder, so nothing was deleted. Allow it in System Settings, Privacy & Security, Automation, then try again.",
+        ),
+        _ => TrashResult::err("Finder couldn't empty it, so nothing was deleted."),
+    }
+}
+
 impl Scanner {
     pub fn new(app: AppHandle, db: Db, activity: Arc<Activity>) -> Self {
         Self {
@@ -449,7 +463,7 @@ impl Scanner {
             tokio::task::spawn_blocking(move || {
                 exec::run_command(
                     "osascript",
-                    &["-e".to_string(), "tell application \"Finder\" to empty trash".to_string()],
+                    &["-e".to_string(), EMPTY_TRASH_SCRIPT.to_string()],
                     Duration::from_secs(180),
                     &shared.processes,
                     || true,
@@ -458,10 +472,14 @@ impl Scanner {
             .await
         };
         let Ok(result) = result else {
-            return TrashResult::err("Finder did not empty the Trash. Nothing was permanently deleted.");
+            return empty_trash_failure(None);
         };
         if result.code != Some(0) {
-            return TrashResult::err("Finder did not empty the Trash. Nothing was permanently deleted.");
+            return empty_trash_failure(None);
+        }
+        let code = result.stdout.trim().parse::<i32>().ok();
+        if code != Some(0) {
+            return empty_trash_failure(code);
         }
         let mut inner = lock(&self.shared.inner);
         let trash_path = paths::join(&[&inner.home, ".Trash"]);
@@ -542,6 +560,7 @@ impl Scanner {
             }
             let saved = folder_listing(&inner, &real).cloned();
             if let Some(saved) = saved.as_ref().filter(|saved| saved.full && saved.complete) {
+                register_entries(&mut inner, &saved.entries, &class);
                 return listing_result(&inner, &real, &class, saved, false, 0);
             }
             let known = saved.as_ref().map(|listing| listing.bytes).filter(|bytes| *bytes > 0).or_else(|| known_size(&inner, &real)).unwrap_or(0);
@@ -579,10 +598,7 @@ impl Scanner {
             limited: saved.as_ref().map(|listing| listing.limited).unwrap_or(false),
             cancel: cancel.clone(),
         };
-        for entry in &job.entries {
-            let listed = to_folder_entry(&inner, entry, &class, entry.sized);
-            add_record(&mut inner, &listed.path, listed.verdict, listed.trashable, listed.chosen);
-        }
+        register_entries(&mut inner, &job.entries, &class);
         let result = listing_from_job(&inner, &job);
         inner.running.insert(real.clone(), job);
         drop(inner);
@@ -647,6 +663,14 @@ fn add_record(inner: &mut Inner, file_path: &str, verdict: Verdict, trashable: b
                 );
             }
         }
+    }
+}
+
+// Rows shown in a folder must be in the registry, or Move to Bin refuses them as unmeasured.
+fn register_entries(inner: &mut Inner, entries: &[MeasuredEntry], class: &Label) {
+    for entry in entries {
+        let listed = to_folder_entry(inner, entry, class, entry.sized);
+        add_record(inner, &listed.path, listed.verdict, listed.trashable, listed.chosen);
     }
 }
 
@@ -1497,4 +1521,16 @@ async fn directory_bytes(shared: Arc<Shared>, folder: &str, generation: u64) -> 
         note_size(&mut lock(&shared.inner), folder, total);
     }
     total
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_trash_failure_is_quiet_only_on_cancel() {
+        assert_eq!(empty_trash_failure(Some(-128)).error, None);
+        assert!(empty_trash_failure(Some(-1743)).error.unwrap().contains("Automation"));
+        assert!(empty_trash_failure(None).error.is_some());
+    }
 }

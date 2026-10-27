@@ -7,6 +7,7 @@ export function useStow() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [busyPath, setBusyPath] = useState<string | null>(null)
   const [emptying, setEmptying] = useState(false)
+  const [emptyError, setEmptyError] = useState<string | null>(null)
 
   useEffect(() => {
     const api = window.stow
@@ -93,14 +94,15 @@ export function useStow() {
     const api = window.stow
     if (!api) return false
     setEmptying(true)
-    dispatch({ type: 'action-error', message: null })
+    setEmptyError(null)
     try {
       const result = await api.emptyTrash()
       if (result.ok) {
         dispatch({ type: 'emptied-trash' })
         return true
       }
-      dispatch({ type: 'action-error', message: result.error ?? 'Finder did not empty the Trash.' })
+      // No error means the person cancelled, which needs no message.
+      setEmptyError(result.error ?? null)
       return false
     } finally {
       setEmptying(false)
@@ -111,5 +113,5 @@ export function useStow() {
     void window.stow?.scan()
   }
 
-  return { available, state, busyPath, emptying, reveal, trash, trashMany, emptyTrash, rescan }
+  return { available, state, busyPath, emptying, emptyError, dismissEmptyError: () => setEmptyError(null), reveal, trash, trashMany, emptyTrash, rescan }
 }

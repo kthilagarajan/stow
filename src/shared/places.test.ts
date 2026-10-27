@@ -6,7 +6,7 @@ const downloads = { path: '/Users/alex/Downloads', name: 'Downloads' }
 
 assert.deepEqual(addPlace([], projects), [projects])
 assert.deepEqual(addPlace([projects], downloads), [downloads, projects])
-assert.deepEqual(addPlace([downloads, projects], projects), [projects, downloads])
+assert.deepEqual(addPlace([downloads, projects], projects), [downloads, projects])
 assert.deepEqual(addPlace([downloads, projects], { path: '/Users/alex/Music', name: 'Music' }, 2).length, 2)
 assert.deepEqual(removePlace([downloads, projects], projects.path), [downloads])
 

@@ -120,14 +120,8 @@ const features = [
       <p class="mt-4 text-mist">
         Download the <code class="font-mono text-sm text-ink">.dmg</code> for your Mac
         (<code class="font-mono text-sm text-ink">arm64</code> for Apple silicon, <code class="font-mono text-sm text-ink">x64</code>
-        for Intel) and drag Stow to Applications. It isn't notarized by Apple yet, so clear the download flag once:
+        for Intel) and drag Stow to Applications. It's notarized by Apple, so it opens like any other app.
       </p>
-      <div class="mx-auto mt-6 flex max-w-xl items-center gap-3 rounded-xl border border-line bg-sheet p-3 text-left">
-        <code id="unquarantine" class="flex-1 font-mono text-[13px] [overflow-wrap:anywhere]">xattr -cr /Applications/Stow.app</code>
-        <button type="button" data-copy="unquarantine" class="shrink-0 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90">
-          Copy
-        </button>
-      </div>
       <p class="mt-6 text-sm text-mist">
         For accurate sizes everywhere, give Stow Full Disk Access in System Settings → Privacy &amp; Security. It works
         without it, too. After that, Stow offers new versions itself.

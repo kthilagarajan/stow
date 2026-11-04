@@ -59,11 +59,7 @@ macOS hides some folders, the Bin among them, unless an app has Full Disk Access
 
 Download the `.dmg` for your Mac from the [latest release](https://github.com/kthilagarajan/stow/releases/latest): `arm64` for Apple silicon, `x64` for Intel. Then drag Stow to Applications.
 
-Stow is not notarized by Apple yet, so clear the download flag once before the first launch:
-
-```bash
-xattr -cr /Applications/Stow.app
-```
+Stow is signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
 ### Updates
 
